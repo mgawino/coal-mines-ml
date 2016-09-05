@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import csv
-from collections import namedtuple
 
-from utils import grouped
-
-SensorLabels = namedtuple('SensorLabels', ['label1', 'label2', 'label3'])
-SensorData = namedtuple('SensorData', ['values'])
+import numpy as np
 
 
 class DataReader(object):
@@ -18,37 +14,50 @@ class DataReader(object):
     TEST_FILE_PATH = "data/testData.csv"
     TEST_LABELS_PATH = "data/testLabels.csv"
 
-    def _iter_data(self, filepaths):
+    @classmethod
+    def _iter_data(cls, filepaths):
         for filepath in filepaths:
             with open(filepath) as file:
+                print('Reading file: {} ...'.format(filepath))
                 reader = csv.reader(file)
-                for line in reader:
-                    sensor_data = list(grouped(line, self.SENSOR_DATA_COUNT_IN_ROW))
-                    assert len(sensor_data) == self.SENSOR_NUM
-                    yield SensorData(sensor_data)
+                for sensor_data in reader:
+                    assert len(sensor_data) == cls.SENSOR_DATA_COUNT_IN_ROW * cls.SENSOR_NUM
+                    yield np.asarray(sensor_data, dtype=np.float)
 
-    def iter_test_data(self):
-        yield from self._iter_data((self.TEST_FILE_PATH,))
+    @classmethod
+    def iter_test_data(cls):
+        yield from cls._iter_data((cls.TEST_FILE_PATH,))
 
-    def iter_training_data(self):
-        yield from self._iter_data(self.TRAINING_FILE_PATHS)
+    @classmethod
+    def iter_training_data(cls):
+        yield from cls._iter_data(cls.TRAINING_FILE_PATHS)
 
-    def _iter_labels(self, filepaths):
+    @staticmethod
+    def _iter_labels(filepaths):
         for filepath in filepaths:
             with open(filepath) as file:
                 reader = csv.reader(file)
                 for sensor_labels in reader:
                     assert len(sensor_labels) == 3
-                    yield SensorLabels(*sensor_labels)
+                    yield np.asarray(sensor_labels)
 
-    def iter_test_labels(self):
-        yield from self._iter_labels((self.TEST_LABELS_PATH,))
+    @classmethod
+    def iter_test_labels(cls):
+        yield from cls._iter_labels((cls.TEST_LABELS_PATH,))
 
-    def iter_training_labels(self):
-        yield from self._iter_labels(self.TRAINING_LABEL_PATHS)
+    @classmethod
+    def iter_training_labels(cls):
+        yield from cls._iter_labels(cls.TRAINING_LABEL_PATHS)
 
-    def iter_sensor_names(self):
-        with open(self.SENSOR_NAMES_FILE_PATH) as file:
-            for column_names in grouped(file, self.SENSOR_DATA_COUNT_IN_ROW):
-                sensor_name = column_names[0].split('_')[0]
-                yield sensor_name
+    @classmethod
+    def get_sensor_names(cls):
+        with open(cls.SENSOR_NAMES_FILE_PATH) as file:
+            seen_names = set()
+            sensor_names = []
+            for column_name in file:
+                sensor_name = column_name.split('_')[0]
+                if sensor_name not in seen_names:
+                    sensor_names.append(sensor_name)
+                seen_names.add(sensor_name)
+            assert len(sensor_names) == cls.SENSOR_NUM
+            return sensor_names
