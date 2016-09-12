@@ -30,8 +30,8 @@ class SensorFunctionTransformer(TransformerMixin):
         return self
 
     def transform(self, X):
-        features = []
-        for row in X:
-            for sensor_data in grouped(row, self.SENSOR_VALUES_IN_ROW):
-                features.append(self.func(sensor_data))
-        return np.array(features)
+        result = np.empty((X.shape[0], X.shape[1] // self.SENSOR_VALUES_IN_ROW), dtype=float)
+        for row_ix, row in enumerate(X):
+            for col_ix, sensor_data in enumerate(grouped(row, self.SENSOR_VALUES_IN_ROW)):
+                result[row_ix][col_ix] = self.func(sensor_data)
+        return result

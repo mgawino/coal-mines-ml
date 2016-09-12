@@ -9,10 +9,14 @@ class DataReader(object):
     SENSOR_DATA_COUNT_IN_ROW = 600
     SENSOR_NUM = 28
     SENSOR_NAMES_FILE_PATH = "data/column_names.txt"
-    TRAINING_FILE_PATHS = ("data/trainingData{}.csv".format(i) for i in range(1, 6))
-    TRAINING_LABEL_PATHS = ("data/trainingLabels{}.csv".format(i) for i in range(1, 6))
-    TEST_FILE_PATH = "data/testData.csv"
-    TEST_LABELS_PATH = "data/testLabels.csv"
+    # TRAINING_FILE_PATHS = ("data/trainingData{}.csv".format(i) for i in range(1, 6))
+    # TRAINING_LABEL_PATHS = ("data/trainingLabels{}.csv".format(i) for i in range(1, 6))
+    # TEST_FILE_PATH = "data/testData.csv"
+    # TEST_LABELS_PATH = "data/testLabels.csv"
+    TRAINING_FILE_PATHS = ("data/sampleTrainingData.csv", )
+    TRAINING_LABEL_PATHS = ("data/sampleTrainingLabels.csv", )
+    TEST_FILE_PATH = "data/sampleTestData.csv"
+    TEST_LABELS_PATH = "data/sampleTestLabels.csv"
 
     @classmethod
     def _iter_data(cls, filepaths):
