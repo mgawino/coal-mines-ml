@@ -53,18 +53,15 @@ class MatrixTransformer(TransformerMixin):
 
 class SensorsDataTransformer(TransformerMixin):
 
-    def __init__(self, sensor_names, function, **function_kwargs):
-        self.sensor_names = sensor_names
+    def __init__(self, function, **function_kwargs):
         self.function = function
         self.function_kwargs = function_kwargs
 
-    def get_feature_names(self):
-        return self.sensor_names
-
     @measure_time
     def transform(self, X):
-        result = np.empty(shape=(X.shape[0], len(self.sensor_names)), dtype=np.float32)
+        sensor_names = X.dtype.names
+        result = np.empty(shape=(X.shape[0], len(sensor_names)), dtype=np.float32)
         for row_ix, row in enumerate(X):
-            for col_ix, sensor_name in enumerate(self.sensor_names):
+            for col_ix, sensor_name in enumerate(sensor_names):
                 result[row_ix][col_ix] = self.function(row[sensor_name], **self.function_kwargs)
         return result

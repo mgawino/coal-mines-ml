@@ -77,14 +77,24 @@ class FeatureExtractor:
         self.transformer = Pipeline([
             ('dataframe', MatrixTransformer(sensor_names, DataReader.SENSOR_DATA_COUNT_IN_ROW)),
             ('features', FeatureUnion([
-                ('max', SensorsDataTransformer(sensor_names, max)),
-                ('min', SensorsDataTransformer(sensor_names, min)),
-                ('median', SensorsDataTransformer(sensor_names, feature_calculators.median))
+                ('max', SensorsDataTransformer(max)),
+                ('min', SensorsDataTransformer(min)),
+                ('mean', SensorsDataTransformer(feature_calculators.mean)),
+                ('median', SensorsDataTransformer(feature_calculators.median)),
+                ('variance', SensorsDataTransformer(feature_calculators.variance)),
+                ('skewness', SensorsDataTransformer(feature_calculators.skewness)),
+                ('kurtosis', SensorsDataTransformer(feature_calculators.kurtosis)),
+                ('std', SensorsDataTransformer(feature_calculators.standard_deviation)),
+                ('sum_values', SensorsDataTransformer(feature_calculators.sum_values)),
+                ('mean_abs_change', SensorsDataTransformer(feature_calculators.mean_abs_change)),
+                ('mean_autocorrelation', SensorsDataTransformer(feature_calculators.mean_autocorrelation)),
+                ('abs_energy', SensorsDataTransformer(feature_calculators.abs_energy))
             ], n_jobs=3))
         ])
-
-    def get_feature_names(self):
-        return self.transformer.named_steps['features'].get_feature_names()
+        transformer_names, _ = zip(*self.transformer.named_steps['features'].transformer_list)
+        self.feature_names = ['{}_{}'.format(transformer_name, sensor_name)
+                              for transformer_name in transformer_names
+                              for sensor_name in sensor_names]
 
     @staticmethod
     def _load_raw_data():
@@ -97,28 +107,38 @@ class FeatureExtractor:
 
     @classmethod
     def clear_cache(cls):
-        os.remove(cls.TRAIN_FEATURES_CACHE_PATH)
-        os.remove(cls.TEST_FEATURES_CACHE_PATH)
+        for path in (cls.TRAIN_FEATURES_CACHE_PATH, cls.TEST_FEATURES_CACHE_PATH):
+            if os.path.exists(path):
+                os.remove(path)
 
-    def _extract_features(self, data, kind, cache_path):
-        features = self.transformer.transform(data)
+    def _load_features_from_cache(self):
+        train_features = np.load(self.TRAIN_FEATURES_CACHE_PATH)
+        test_features = np.load(self.TEST_FEATURES_CACHE_PATH)
+        return train_features, test_features
+
+    @staticmethod
+    def _cache_features(features, cache_path):
         np.save(cache_path, features)
-        return features
+
+    def _transform_data_to_features(self):
+        X_train = DataReader.read_training_data()
+        train_features = self.transformer.transform(X_train)
+        X_test = DataReader.read_test_data()
+        test_features = self.transformer.transform(X_test)
+        return train_features, test_features
 
     def load_features(self):
         if os.path.exists(self.TRAIN_FEATURES_CACHE_PATH) and\
            os.path.exists(self.TEST_FEATURES_CACHE_PATH):
-            train_features = np.load(self.TRAIN_FEATURES_CACHE_PATH)
-            test_features = np.load(self.TEST_FEATURES_CACHE_PATH)
-            click.secho('Features found in cache', fg='blue')
+            click.secho('Loading features from cache', fg='blue')
+            train_features, test_features = self._load_features_from_cache()
+            self._cache_features(train_features, self.TRAIN_FEATURES_CACHE_PATH)
+            self._cache_features(test_features, self.TEST_FEATURES_CACHE_PATH)
         else:
-            X_train = DataReader.read_training_data()
-            click.secho('Loaded training data: {}'.format(X_train.shape), fg='green')
-            train_features = self._extract_features(X_train, 'train', self.TRAIN_FEATURES_CACHE_PATH)
-            X_test = DataReader.read_test_data()
-            click.secho('Loaded test data: {}'.format(X_test.shape), fg='green')
-            test_features = self._extract_features(X_test, 'test', self.TEST_FEATURES_CACHE_PATH)
+            click.secho('Transforming data to features', fg='blue')
+            train_features, test_features = self._transform_data_to_features()
 
-        assert train_features.shape[1] == test_features.shape[1]
-        click.secho('Features extracted: {}'.format(train_features.shape[1]), fg='green')
-        return train_features, test_features
+        assert train_features.shape[1] == test_features.shape[1] == len(self.feature_names)
+        click.secho('Train features shape: {}'.format(train_features.shape))
+        click.secho('Test features shape: {}'.format(test_features.shape))
+        return train_features, test_features, self.feature_names
