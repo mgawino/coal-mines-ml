@@ -1,22 +1,11 @@
 # -*- coding: utf-8 -*-
 import time
 
-import click
 import numpy as np
 
+import click
+
 from sklearn.base import TransformerMixin
-
-
-def grouped(iterable, count):
-    """ Group @iterable into lists of length @count """
-    chunk = []
-    for item in iterable:
-        chunk.append(item)
-        if len(chunk) == count:
-            yield chunk
-            chunk = []
-    if len(chunk) > 0:
-        yield chunk
 
 
 def measure_time(fun):
@@ -31,26 +20,6 @@ def measure_time(fun):
     return inner
 
 
-class MatrixTransformer(TransformerMixin):
-
-    def __init__(self, sensor_names, sensor_data_len):
-        self.data_type = np.dtype([
-            (sensor_name, np.float32, (sensor_data_len,)) for sensor_name in sensor_names
-        ])
-        self.sensor_data_len = sensor_data_len
-        self.sensor_names = sensor_names
-
-    @measure_time
-    def transform(self, X):
-        matrix = np.empty(X.shape[0], dtype=self.data_type)
-        for row_ix, data_row in enumerate(X):
-            sensors_data = list(grouped(data_row, self.sensor_data_len))
-            for sensor_name, sensor_data in zip(self.sensor_names, sensors_data):
-                matrix[row_ix][sensor_name] = sensor_data
-        del X
-        return matrix
-
-
 class SensorsDataTransformer(TransformerMixin):
 
     def __init__(self, function, **function_kwargs):
@@ -59,9 +28,10 @@ class SensorsDataTransformer(TransformerMixin):
 
     @measure_time
     def transform(self, X):
-        sensor_names = X.dtype.names
-        result = np.empty(shape=(X.shape[0], len(sensor_names)), dtype=np.float32)
-        for row_ix, row in enumerate(X):
-            for col_ix, sensor_name in enumerate(sensor_names):
-                result[row_ix][col_ix] = self.function(row[sensor_name], **self.function_kwargs)
-        return result
+        result = []
+        for row in X:
+            features = []
+            for sensor_data in row:
+                features.append(self.function(sensor_data, **self.function_kwargs))
+            result.append(np.asarray(features, dtype=np.float32))
+        return np.asarray(result, dtype=np.float32)

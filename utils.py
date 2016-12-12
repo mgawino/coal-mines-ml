@@ -6,36 +6,51 @@ import os
 import click
 import numpy as np
 from sklearn.pipeline import Pipeline, FeatureUnion
-from transformer import MatrixTransformer, SensorsDataTransformer
+from transformer import SensorsDataTransformer
 from tsfresh.feature_extraction import feature_calculators
+
+
+def grouped(iterable, count):
+    """ Group @iterable into lists of length @count """
+    chunk = []
+    for item in iterable:
+        chunk.append(item)
+        if len(chunk) == count:
+            yield chunk
+            chunk = []
+    if len(chunk) > 0:
+        yield chunk
 
 
 class DataReader(object):
     SENSOR_DATA_COUNT_IN_ROW = 600
     SENSOR_NUM = 28
     SENSOR_NAMES_FILE_PATH = "data/column_names.txt"
-    TRAINING_FILE_PATHS = ("data/trainingData{}.csv".format(i) for i in range(1, 2))
-    TRAINING_LABEL_PATHS = ("data/trainingLabels{}.csv".format(i) for i in range(1, 2))
+    TRAINING_FILE_PATHS = ("data/trainingData{}.csv".format(i) for i in range(1, 3))
+    TRAINING_LABEL_PATHS = ("data/trainingLabels{}.csv".format(i) for i in range(1, 3))
     TEST_FILE_PATH = "data/testData.csv"
     TEST_LABELS_PATH = "data/testLabels.csv"
 
     @classmethod
-    def _iter_data(cls, filepaths):
+    def _iter_file_data(cls, filepaths):
         for filepath in filepaths:
+            file_data = []
             with open(filepath) as file:
                 print('Reading file: {} ...'.format(filepath))
                 reader = csv.reader(file)
-                for sensor_data in reader:
-                    assert len(sensor_data) == cls.SENSOR_DATA_COUNT_IN_ROW * cls.SENSOR_NUM
-                    yield np.asarray(sensor_data, dtype=np.float)
+                for row in reader:
+                    sensors_data = list(grouped(row, cls.SENSOR_DATA_COUNT_IN_ROW))
+                    assert len(sensors_data) == cls.SENSOR_NUM
+                    file_data.append(np.asarray(sensors_data, dtype=np.float32))
+            yield np.asarray(file_data, dtype=np.float32)
 
     @classmethod
     def read_test_data(cls):
-        return np.array(list(cls._iter_data((cls.TEST_FILE_PATH,))))
+        return next(cls._iter_file_data((cls.TEST_FILE_PATH,)))
 
     @classmethod
-    def read_training_data(cls):
-        return np.array(list(cls._iter_data(cls.TRAINING_FILE_PATHS)))
+    def iter_train_files_data(cls):
+        yield from cls._iter_file_data(cls.TRAINING_FILE_PATHS)
 
     @staticmethod
     def _iter_labels(filepaths):
@@ -73,9 +88,7 @@ class FeatureExtractor:
     TEST_FEATURES_CACHE_PATH = '/tmp/test_features_cache.npy'
 
     def __init__(self):
-        sensor_names = DataReader.get_sensor_names()
         self.transformer = Pipeline([
-            ('dataframe', MatrixTransformer(sensor_names, DataReader.SENSOR_DATA_COUNT_IN_ROW)),
             ('features', FeatureUnion([
                 ('max', SensorsDataTransformer(max)),
                 ('min', SensorsDataTransformer(min)),
@@ -91,19 +104,11 @@ class FeatureExtractor:
                 ('abs_energy', SensorsDataTransformer(feature_calculators.abs_energy))
             ], n_jobs=3))
         ])
-        transformer_names, _ = zip(*self.transformer.named_steps['features'].transformer_list)
+        sensor_names = DataReader.get_sensor_names()
+        self.transformer_names, _ = zip(*self.transformer.named_steps['features'].transformer_list)
         self.feature_names = ['{}_{}'.format(transformer_name, sensor_name)
-                              for transformer_name in transformer_names
+                              for transformer_name in self.transformer_names
                               for sensor_name in sensor_names]
-
-    @staticmethod
-    def _load_raw_data():
-        X_train = DataReader.read_training_data()
-        click.secho('Loaded training data: {}'.format(X_train.shape), fg='green')
-
-        X_test = DataReader.read_test_data()
-        click.secho('Loaded test data: {}'.format(X_test.shape), fg='green')
-        return X_train, X_test
 
     @classmethod
     def clear_cache(cls):
@@ -121,8 +126,13 @@ class FeatureExtractor:
         np.save(cache_path, features)
 
     def _transform_data_to_features(self):
-        X_train = DataReader.read_training_data()
-        train_features = self.transformer.transform(X_train)
+        train_features_partials = []
+        for X_train_partial in DataReader.iter_train_files_data():
+            train_features_partial = self.transformer.transform(X_train_partial)
+            assert train_features_partial.shape[0] == X_train_partial.shape[0]
+            assert train_features_partial.shape[1] == len(self.transformer_names) * DataReader.SENSOR_NUM
+            train_features_partials.append(train_features_partial)
+        train_features = np.concatenate(train_features_partials, axis=0)
         X_test = DataReader.read_test_data()
         test_features = self.transformer.transform(X_test)
         return train_features, test_features
