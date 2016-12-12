@@ -4,7 +4,7 @@ from collections import Counter
 import click
 from utils import DataReader, FeatureExtractor
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 
@@ -17,7 +17,7 @@ def create_pipeline(selection_transformer):
 
 
 def make_selection_transformers():
-    return [SelectKBest(chi2, k=10)]
+    return [SelectKBest(f_classif, k=10)]
 
 
 def class_to_binary(iterable):
