@@ -132,11 +132,11 @@ class FeatureExtractor:
            os.path.exists(self.TEST_FEATURES_CACHE_PATH):
             click.secho('Loading features from cache', fg='blue')
             train_features, test_features = self._load_features_from_cache()
-            self._cache_features(train_features, self.TRAIN_FEATURES_CACHE_PATH)
-            self._cache_features(test_features, self.TEST_FEATURES_CACHE_PATH)
         else:
             click.secho('Transforming data to features', fg='blue')
             train_features, test_features = self._transform_data_to_features()
+            self._cache_features(train_features, self.TRAIN_FEATURES_CACHE_PATH)
+            self._cache_features(test_features, self.TEST_FEATURES_CACHE_PATH)
 
         assert train_features.shape[1] == test_features.shape[1] == len(self.feature_names)
         click.secho('Train features shape: {}'.format(train_features.shape))
