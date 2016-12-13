@@ -2,9 +2,11 @@
 from collections import Counter
 
 import click
-from utils import DataReader, FeatureExtractor
+from sklearn.decomposition import PCA
+from reader import DataReader
+from feature_extractor import FeatureExtractor
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
 from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 
@@ -17,7 +19,11 @@ def create_pipeline(selection_transformer):
 
 
 def make_selection_transformers():
-    return [SelectKBest(f_classif, k=10)]
+    return [
+        SelectKBest(f_classif, k=5),
+        PCA(n_components=5),
+        # SelectKBest(mutual_info_classif, k=5),  # slow
+    ]
 
 
 def class_to_binary(iterable):
@@ -45,12 +51,16 @@ def main(clear_cache):
         y_train_label = y_train[:, label_ix]
         y_test_label = y_test[:, label_ix]
         print('Train labels: {} Test labels: {}'.format(Counter(y_train_label), Counter(y_test_label)))
-        for selection_transformer in selection_transformers:
+    for selection_transformer in selection_transformers:
+        for label_ix in range(3):
+            y_train_label = y_train[:, label_ix]
+            y_test_label = y_test[:, label_ix]
             pipeline = create_pipeline(selection_transformer)
             pipeline.fit(train_features, y_train_label)
             # selected_features = feature_names[selection_transformer.get_support(indices=True)]
             predictions = pipeline.predict(test_features)
-            print('AUC: ', roc_auc_score(class_to_binary(y_test_label), class_to_binary(predictions)))
+            auc_score = roc_auc_score(class_to_binary(y_test_label), class_to_binary(predictions))
+            print('Selection method: {} AUC: {}'.format(selection_transformer, auc_score))
 
 
 if __name__ == '__main__':
