@@ -3,6 +3,9 @@ from collections import Counter
 
 import click
 from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectFromModel
+from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
+
 from reader import DataReader
 from feature_extractor import FeatureExtractor
 from sklearn.ensemble import RandomForestClassifier
@@ -19,10 +22,14 @@ def create_pipeline(selection_transformer):
 
 
 def make_selection_transformers():
+    random_forest_clf = RandomForestClassifier(n_estimators=100)
     return [
         SelectKBest(f_classif, k=5),
+        SelectKBest(mutual_info_classif, k=5),
+        SelectFromModel(random_forest_clf, threshold=0.5),
         PCA(n_components=5),
-        # SelectKBest(mutual_info_classif, k=5),  # slow
+        GaussianRandomProjection(n_components=5),
+        SparseRandomProjection(n_components=5)
     ]
 
 
@@ -30,8 +37,8 @@ def class_to_binary(iterable):
     return list(map(lambda x: 1 if x == 'warning' else 0, iterable))
 
 
-def load_data(clear_cache):
-    feature_extractor = FeatureExtractor()
+def load_data(clear_cache, n_jobs):
+    feature_extractor = FeatureExtractor(n_jobs)
     if clear_cache:
         feature_extractor.clear_cache()
     train_features, test_features, feature_names = feature_extractor.load_features()
@@ -44,8 +51,9 @@ def load_data(clear_cache):
 
 @click.command()
 @click.option('--clear-cache', '-cc', is_flag=True, help='Clear features cache')
-def main(clear_cache):
-    train_features, y_train, test_features, y_test, feature_names = load_data(clear_cache)
+@click.option('--n-jobs', '-j', type=click.INT, help='Feature extraction jobs', default='3')
+def main(clear_cache, n_jobs):
+    train_features, y_train, test_features, y_test, feature_names = load_data(clear_cache, n_jobs)
     selection_transformers = make_selection_transformers()
     for label_ix in range(3):
         y_train_label = y_train[:, label_ix]

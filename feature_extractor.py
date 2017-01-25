@@ -16,7 +16,7 @@ class FeatureExtractor:
     TEST_FEATURES_CACHE_PATH = os.path.expanduser('~/test_features_cache.npy')
     FEATURE_NAMES_CACHE_PATH = os.path.expanduser('~/feature_names_cache.npy')
 
-    def __init__(self):
+    def __init__(self, n_jobs):
         self.transformer = Pipeline([
             ('features', FeatureUnion([
                 ('max', SensorsDataTransformer(max)),
@@ -56,7 +56,7 @@ class FeatureExtractor:
                 # ('autocorrelation', SensorsDataTransformer(feature_calculators.autocorrelation)),
                 # ('time_reversal_asymmetry_statistic', SensorsDataTransformer(feature_calculators.time_reversal_asymmetry_statistic)),
                 # ('binned_entropy', SensorsDataTransformer(feature_calculators.binned_entropy)),
-                ], n_jobs=3)
+                ], n_jobs=n_jobs)
             )
         ])
         self.filter_transformer = VarianceThreshold(threshold=0.)  # remove features with Var == 0

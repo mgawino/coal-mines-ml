@@ -11,7 +11,7 @@ class SensorsDataTransformer(TransformerMixin):
         self.function = function
         self.function_kwargs = function_kwargs
 
-    @measure_time(log_start=False)
+    @measure_time()
     def transform(self, X):
         result = []
         for row in X:
