@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
+import json
+import os
 from collections import Counter
+
+import time
+from uuid import uuid4
 
 import numpy as np
 
 import click
+from joblib import Parallel, delayed
 from skfeature.function.information_theoretical_based.MRMR import mrmr
 from skfeature.function.statistical_based.gini_index import gini_index
+from sklearn.datasets import make_classification
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectFromModel
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
@@ -16,29 +23,24 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
 from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
-from wrappers import SelectKBestWrapper, cfs_wrapper
+from sklearn.svm import SVC
+from wrappers import gini_index_wrapper, mrmr_wrapper
 
-
-def create_pipeline(selection_transformer):
-    return Pipeline([
-        ('selection', selection_transformer),
-        ('random_forest', RandomForestClassifier())
-    ])
+PROJECT_PATH = os.path.dirname(__file__)
+RESULTS_PATH = os.path.join(PROJECT_PATH, 'results')
 
 
 def make_selection_transformers():
     random_forest_clf = RandomForestClassifier(n_estimators=100)
     return [
-        # SelectKBest(f_classif, k=5),
-        # SelectKBest(mutual_info_classif, k=5),
-        SelectKBest(gini_index, k=5),
-        # SelectKBestWrapper(cfs_wrapper, k=5),
-        # SelectKBestWrapper(mrmr, k=5),
-        # Genetic algorithms
-        # SelectFromModel(random_forest_clf, threshold=0.5),
-        # PCA(n_components=1),
-        # GaussianRandomProjection(n_components=1),
-        # SparseRandomProjection(n_components=1)
+        SelectKBest(f_classif, k=2),
+        SelectKBest(mutual_info_classif, k=2),
+        SelectKBest(gini_index_wrapper, k=2),
+        SelectKBest(mrmr_wrapper, k=2),
+        PCA(n_components=2),
+        SelectFromModel(random_forest_clf)
+        # GaussianRandomProjection(n_components='auto'),
+        # SparseRandomProjection(n_components='auto')
     ]
 
 
@@ -61,26 +63,67 @@ def load_data(clear_cache, n_jobs):
     return train_features, y_train, test_features, y_test, feature_names
 
 
+def generate_data():
+    n_features = 20
+    X, y = make_classification(
+        n_samples=2000,
+        n_features=n_features,
+        n_informative=2,
+        n_redundant=0,
+        n_repeated=0,
+        n_classes=2,
+        random_state=123,
+        shuffle=False
+    )
+    y = np.asarray([y]).T
+    return X, y, X, y, np.array(list('f_{}'.format(i) for i in range(n_features)))
+
+
+def print_labels_summary(y_train, y_test):
+    assert y_train.shape == y_test.shape
+    for label_ix in range(y_train.shape[1]):
+        y_train_label = y_train[:, label_ix]
+        y_test_label = y_test[:, label_ix]
+        print('Label: {} Train: {} Test: {}'.format(label_ix, Counter(y_train_label), Counter(y_test_label)))
+
+
+def validate_selection(selection_transformer, label_ix, train_features,  y_train, test_features, y_test, feature_names):
+    print('Started selection: {}'.format(str(selection_transformer)))
+    start_time = time.process_time()
+    y_train_label = y_train[:, label_ix]
+    y_test_label = y_test[:, label_ix]
+    pipeline = Pipeline([
+        ('selection', selection_transformer),
+        ('random_forest', SVC())
+    ])
+    pipeline.fit(train_features, y_train_label)
+    selected_features = []
+    if hasattr(selection_transformer, 'get_support'):
+        selected_features = feature_names[selection_transformer.get_support(indices=True)]
+    predictions = pipeline.predict(test_features)
+    auc_score = roc_auc_score(y_test_label, predictions)
+    results = {
+        'auc_score': auc_score,
+        'selected_features': sorted(selected_features),
+        'time': time.process_time() - start_time,
+        'method': str(selection_transformer)
+    }
+    with open(os.path.join(RESULTS_PATH, str(uuid4())), 'w') as output:
+        json.dump(results, output)
+
+
 @click.command()
 @click.option('--clear-cache', '-cc', is_flag=True, help='Clear features cache')
 @click.option('--n-jobs', '-j', type=click.INT, help='Feature extraction jobs', default='3')
 def main(clear_cache, n_jobs):
-    train_features, y_train, test_features, y_test, feature_names = load_data(clear_cache, n_jobs)
+    train_features, y_train, test_features, y_test, feature_names = generate_data()  # FIXME load_data(clear_cache, n_jobs)
+    print('Finished generating data...')
     selection_transformers = make_selection_transformers()
-    for label_ix in range(3):
-        y_train_label = y_train[:, label_ix]
-        y_test_label = y_test[:, label_ix]
-        print('Label: {} Train: {} Test: {}'.format(label_ix, Counter(y_train_label), Counter(y_test_label)))
-    for selection_transformer in selection_transformers:
-        for label_ix in range(3):
-            y_train_label = y_train[:, label_ix]
-            y_test_label = y_test[:, label_ix]
-            pipeline = create_pipeline(selection_transformer)
-            pipeline.fit(train_features, y_train_label)
-            # selected_features = feature_names[selection_transformer.get_support(indices=True)]
-            predictions = pipeline.predict(test_features)
-            auc_score = roc_auc_score(y_test_label, predictions)
-            print('Selection method: {} for label: {} AUC: {}'.format(selection_transformer, label_ix, auc_score))
+    print_labels_summary(y_train, y_test)
+    Parallel(n_jobs=n_jobs, verbose=100, pre_dispatch='n_jobs')(
+        delayed(validate_selection)(selection_transformer, 0, train_features, y_train, test_features, y_test, feature_names)
+        for selection_transformer in selection_transformers
+    )
 
 
 if __name__ == '__main__':
