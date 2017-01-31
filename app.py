@@ -10,8 +10,6 @@ import numpy as np
 
 import click
 from joblib import Parallel, delayed
-from skfeature.function.information_theoretical_based.MRMR import mrmr
-from skfeature.function.statistical_based.gini_index import gini_index
 from sklearn.datasets import make_classification
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectFromModel
@@ -22,26 +20,13 @@ from feature_extractor import FeatureExtractor
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
 from sklearn.metrics import roc_auc_score
-from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
 from wrappers import gini_index_wrapper, mrmr_wrapper
 
 PROJECT_PATH = os.path.dirname(__file__)
 RESULTS_PATH = os.path.join(PROJECT_PATH, 'results')
 
-
-def make_selection_transformers():
-    random_forest_clf = RandomForestClassifier(n_estimators=100)
-    return [
-        SelectKBest(f_classif, k=2),
-        SelectKBest(mutual_info_classif, k=2),
-        SelectKBest(gini_index_wrapper, k=2),
-        SelectKBest(mrmr_wrapper, k=2),
-        PCA(n_components=2),
-        SelectFromModel(random_forest_clf)
-        # GaussianRandomProjection(n_components='auto'),
-        # SparseRandomProjection(n_components='auto')
-    ]
+MAX_FEATURES = 40
 
 
 def class_to_binary(x):
@@ -87,18 +72,18 @@ def print_labels_summary(y_train, y_test):
         print('Label: {} Train: {} Test: {}'.format(label_ix, Counter(y_train_label), Counter(y_test_label)))
 
 
-def validate_selection(selection_transformer, label_ix, train_features,  y_train, test_features, y_test, feature_names):
+def validate_ranking_selection(selection_transformer, label_ix, train_features, y_train, test_features, y_test, feature_names):
     print('Started selection: {}'.format(str(selection_transformer)))
     start_time = time.process_time()
     y_train_label = y_train[:, label_ix]
     y_test_label = y_test[:, label_ix]
-    pipeline = Pipeline([
-        ('selection', selection_transformer),
-        ('random_forest', SVC())
-    ])
-    pipeline.fit(train_features, y_train_label)
-    selected_features = []
-    if hasattr(selection_transformer, 'get_support'):
+    selection_transformer.fit(train_features, y_train_label)
+    for feature_num in [5, 10, 20, 40]:
+        selection_transformer.k = feature_num
+        X_train = selection_transformer.transform(train_features)
+        assert X_train.shape
+        X_test = selection_transformer.transform(test_features)
+
         selected_features = feature_names[selection_transformer.get_support(indices=True)]
     predictions = pipeline.predict(test_features)
     auc_score = roc_auc_score(y_test_label, predictions)
@@ -106,10 +91,40 @@ def validate_selection(selection_transformer, label_ix, train_features,  y_train
         'auc_score': auc_score,
         'selected_features': sorted(selected_features),
         'time': time.process_time() - start_time,
-        'method': str(selection_transformer)
+        'method': str(selection_transformer),
+        'label_ix': label_ix
     }
     with open(os.path.join(RESULTS_PATH, str(uuid4())), 'w') as output:
         json.dump(results, output)
+
+
+def run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names):
+    ranking_selectors = [
+        SelectKBest(f_classif, k=MAX_FEATURES),
+        SelectKBest(mutual_info_classif, k=MAX_FEATURES),
+        SelectKBest(gini_index_wrapper, k=MAX_FEATURES),
+        SelectKBest(mrmr_wrapper, k=MAX_FEATURES)
+    ]
+    Parallel(n_jobs=n_jobs, verbose=100, pre_dispatch='n_jobs')(
+        delayed(validate_ranking_selection)(selection_transformer, label_ix, train_features, y_train, test_features,
+                                            y_test, feature_names)
+        for selection_transformer in ranking_selectors
+        for label_ix in range(y_train.shape[1])
+    )
+
+
+def run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test):
+    dimensionality_reduction_selectors = [
+        PCA(n_components=2),
+        GaussianRandomProjection(n_components=10),
+        SparseRandomProjection(n_components=10)
+    ]
+
+
+def run_model_selection_methods():
+    random_forest_clf = RandomForestClassifier(n_estimators=100)
+    # TODO: ExtraTrees
+    SelectFromModel(random_forest_clf)
 
 
 @click.command()
@@ -117,13 +132,8 @@ def validate_selection(selection_transformer, label_ix, train_features,  y_train
 @click.option('--n-jobs', '-j', type=click.INT, help='Feature extraction jobs', default='3')
 def main(clear_cache, n_jobs):
     train_features, y_train, test_features, y_test, feature_names = generate_data()  # FIXME load_data(clear_cache, n_jobs)
-    print('Finished generating data...')
-    selection_transformers = make_selection_transformers()
     print_labels_summary(y_train, y_test)
-    Parallel(n_jobs=n_jobs, verbose=100, pre_dispatch='n_jobs')(
-        delayed(validate_selection)(selection_transformer, 0, train_features, y_train, test_features, y_test, feature_names)
-        for selection_transformer in selection_transformers
-    )
+    run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
 
 
 if __name__ == '__main__':
