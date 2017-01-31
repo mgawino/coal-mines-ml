@@ -173,7 +173,7 @@ def run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_f
 def validate_model_selectors(model_selector, train_features, y_train, test_features, y_test, feature_names, label_ix):
     print('Started model selection: {}'.format(str(model_selector)))
     selection_duration, _ = timeit(model_selector.fit, train_features, y_train)
-    for feature_threshold in ['mean', '1.2 * mean', '1.4 * mean']:
+    for feature_threshold in ['mean', '2 * mean', '3 * mean']:
         selector = SelectFromModel(model_selector, prefit=True, threshold=feature_threshold)
         X_train = selector.transform(train_features)
         X_test = selector.transform(test_features)
