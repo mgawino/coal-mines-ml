@@ -6,3 +6,4 @@ click
 tsfresh
 -e git+https://github.com/mgawino/scikit-feature.git#egg=scikit-feature
 joblib
+terminaltables
