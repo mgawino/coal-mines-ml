@@ -19,45 +19,45 @@ class FeatureExtractor:
     def __init__(self, n_jobs):
         self.transformer = Pipeline([
             ('features', FeatureUnion([
-                ('sample_entropy', SensorsDataTransformer(feature_calculators.sample_entropy)),
-                ('max', SensorsDataTransformer(max)),
-                ('last_location_of_maximum', SensorsDataTransformer(feature_calculators.last_location_of_maximum)),
-                ('first_location_of_maximum', SensorsDataTransformer(feature_calculators.first_location_of_maximum)),
-                ('min', SensorsDataTransformer(min)),
-                ('last_location_of_minimum', SensorsDataTransformer(feature_calculators.last_location_of_minimum)),
-                ('first_location_of_minimum', SensorsDataTransformer(feature_calculators.first_location_of_minimum)),
-                ('mean', SensorsDataTransformer(feature_calculators.mean)),
+                # ('sample_entropy', SensorsDataTransformer(feature_calculators.sample_entropy)),  # inf
+                # ('number_peaks_5', SensorsDataTransformer(feature_calculators.number_peaks, n=5)),  # 640
+                # ('number_peaks_10', SensorsDataTransformer(feature_calculators.number_peaks, n=10)),  # 870
+                # ('number_peaks_20', SensorsDataTransformer(feature_calculators.number_peaks, n=20)),  # 1200
+                ('count_above_mean', SensorsDataTransformer(feature_calculators.count_above_mean)),  # 500
+                ('count_below_mean', SensorsDataTransformer(feature_calculators.count_below_mean)),  # 500
+                ('autocorrelation_10', SensorsDataTransformer(feature_calculators.autocorrelation, lag=10)),  # 200
+                ('autocorrelation_20', SensorsDataTransformer(feature_calculators.autocorrelation, lag=20)),  # 200
+                ('autocorrelation_50', SensorsDataTransformer(feature_calculators.autocorrelation, lag=50)),  # 200
+                ('max', SensorsDataTransformer(max)),  # 200
+                ('min', SensorsDataTransformer(min)),  # 200
+                ('quantile_0.2', SensorsDataTransformer(feature_calculators.quantile, q=0.2)),  # 130
+                ('quantile_0.4', SensorsDataTransformer(feature_calculators.quantile, q=0.4)),  # 130
+                ('quantile_0.6', SensorsDataTransformer(feature_calculators.quantile, q=0.6)),  # 130
+                ('quantile_0.8', SensorsDataTransformer(feature_calculators.quantile, q=0.8)),  # 130
+                ('skewness', SensorsDataTransformer(feature_calculators.skewness)),  # 113
+                ('kurtosis', SensorsDataTransformer(feature_calculators.kurtosis)),  # 120
                 ('longest_strike_below_mean', SensorsDataTransformer(feature_calculators.longest_strike_below_mean)),
                 ('longest_strike_above_mean', SensorsDataTransformer(feature_calculators.longest_strike_above_mean)),
-                ('count_above_mean', SensorsDataTransformer(feature_calculators.count_above_mean)),
-                ('count_below_mean', SensorsDataTransformer(feature_calculators.count_below_mean)),
+                ('last_location_of_maximum', SensorsDataTransformer(feature_calculators.last_location_of_maximum)),
+                ('first_location_of_maximum', SensorsDataTransformer(feature_calculators.first_location_of_maximum)),
+                ('last_location_of_minimum', SensorsDataTransformer(feature_calculators.last_location_of_minimum)),
+                ('first_location_of_minimum', SensorsDataTransformer(feature_calculators.first_location_of_minimum)),
+                ('binned_entropy_5', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=5)),
+                ('binned_entropy_10', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=10)),
+                ('binned_entropy_20', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=20)),
+                ('mean_second_derivate_central', SensorsDataTransformer(feature_calculators.mean_second_derivate_central)),
+                ('mean', SensorsDataTransformer(feature_calculators.mean)),
                 ('median', SensorsDataTransformer(feature_calculators.median)),
                 ('variance', SensorsDataTransformer(feature_calculators.variance)),
                 ('std', SensorsDataTransformer(feature_calculators.standard_deviation)),
                 ('large_std', SensorsDataTransformer(feature_calculators.large_standard_deviation)),
                 ('var_larger_than_std', SensorsDataTransformer(feature_calculators.variance_larger_than_standard_deviation)),
-                ('skewness', SensorsDataTransformer(feature_calculators.skewness)),
-                ('kurtosis', SensorsDataTransformer(feature_calculators.kurtosis)),
                 ('sum_values', SensorsDataTransformer(feature_calculators.sum_values)),
                 ('mean_change', SensorsDataTransformer(feature_calculators.mean_change)),
                 ('mean_abs_change', SensorsDataTransformer(feature_calculators.mean_abs_change)),
                 ('absolute_sum_of_changes', SensorsDataTransformer(feature_calculators.absolute_sum_of_changes)),
-                ('mean_autocorrelation', SensorsDataTransformer(feature_calculators.mean_autocorrelation)),
+                ('mean_autocorrelation', SensorsDataTransformer(feature_calculators.mean_autocorrelation)),  # 117
                 ('abs_energy', SensorsDataTransformer(feature_calculators.abs_energy)),
-                ('mean_second_derivate_central', SensorsDataTransformer(feature_calculators.mean_second_derivate_central)),
-                ('number_peaks_5', SensorsDataTransformer(feature_calculators.number_peaks, n=5)),
-                ('number_peaks_10', SensorsDataTransformer(feature_calculators.number_peaks, n=10)),
-                ('number_peaks_20', SensorsDataTransformer(feature_calculators.number_peaks, n=20)),
-                ('quantile_0.2', SensorsDataTransformer(feature_calculators.quantile, q=0.2)),
-                ('quantile_0.4', SensorsDataTransformer(feature_calculators.quantile, q=0.4)),
-                ('quantile_0.6', SensorsDataTransformer(feature_calculators.quantile, q=0.6)),
-                ('quantile_0.8', SensorsDataTransformer(feature_calculators.quantile, q=0.8)),
-                ('binned_entropy_5', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=5)),
-                ('binned_entropy_10', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=10)),
-                ('binned_entropy_20', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=20)),
-                ('autocorrelation_10', SensorsDataTransformer(feature_calculators.autocorrelation, lag=10)),
-                ('autocorrelation_20', SensorsDataTransformer(feature_calculators.autocorrelation, lag=20)),
-                ('autocorrelation_50', SensorsDataTransformer(feature_calculators.autocorrelation, lag=50)),
                 # ('fft_coefficient', SensorsDataTransformer(feature_calculators.fft_coefficient)),
                 # ('index_mass_quantile', SensorsDataTransformer(feature_calculators.index_mass_quantile)),
                 # ('number_cwt_peaks', SensorsDataTransformer(feature_calculators.number_cwt_peaks)),
@@ -102,13 +102,12 @@ class FeatureExtractor:
         np.save(cls.FEATURE_NAMES_CACHE_PATH, feature_names)
 
     def _transform_data_to_features(self):
-        train_features_partials = []
+        X_train_partials = []
         for X_train_partial in DataReader.iter_train_files_data():
-            train_features_partial = self.transformer.transform(X_train_partial)
-            assert train_features_partial.shape[0] == X_train_partial.shape[0]
-            assert train_features_partial.shape[1] == len(self.transformer_names) * DataReader.SENSOR_NUM
-            train_features_partials.append(train_features_partial)
-        train_features = np.concatenate(train_features_partials, axis=0)
+            X_train_partials.append(X_train_partial)
+        X_train = np.concatenate(X_train_partials, axis=0)
+        train_features = self.transformer.transform(X_train)
+        assert train_features.shape[1] == len(self.transformer_names) * DataReader.SENSOR_NUM
         X_test = DataReader.read_test_data()
         test_features = self.transformer.transform(X_test)
         return train_features, test_features
