@@ -11,7 +11,7 @@ import click
 from joblib import Parallel, delayed
 from sklearn.datasets import make_classification
 from sklearn.decomposition import PCA
-from sklearn.feature_selection import SelectFromModel
+from sklearn.feature_selection import SelectFromModel, VarianceThreshold
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
 
 from reader import DataReader
@@ -30,7 +30,9 @@ def class_to_binary(x):
     return 1 if x == 'warning' else 0
 
 
-def load_data(clear_cache, n_jobs):
+def load_data(clear_cache, n_jobs, test):
+    if test:
+        return generate_data()
     feature_extractor = FeatureExtractor(n_jobs)
     if clear_cache:
         feature_extractor.clear_cache()
@@ -207,11 +209,22 @@ def run_model_selection_methods(n_jobs, train_features, y_train, test_features, 
     )
 
 
+def pre_filter(self, train_features, test_features):
+    filter_transformer = VarianceThreshold(threshold=0.)  # remove features with Var == 0
+    train_features = filter_transformer.fit_transform(train_features)
+    test_features = filter_transformer.transform(test_features)
+    feature_names = self.feature_names[self.filter_transformer.get_support(indices=True)]
+    removed_features_count = len(self.feature_names) - len(feature_names)
+    click.secho('Removed {} const features'.format(removed_features_count), fg='red')
+    return train_features, test_features, feature_names
+
+
 @click.command()
 @click.option('--clear-cache', '-cc', is_flag=True, help='Clear features cache')
 @click.option('--n-jobs', '-j', type=click.INT, help='Feature extraction jobs', default='3')
-def main(clear_cache, n_jobs):
-    train_features, y_train, test_features, y_test, feature_names = generate_data()  # FIXME load_data(clear_cache, n_jobs)
+@click.option('--test', '-t', is_flag=True)
+def main(clear_cache, n_jobs, test):
+    train_features, y_train, test_features, y_test, feature_names = load_data(clear_cache, n_jobs, test)
     print_labels_summary(y_train, y_test)
     run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
     run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test)
