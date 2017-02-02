@@ -245,6 +245,7 @@ def pre_filter(train_features, test_features, feature_names):
         ('scaler', StandardScaler())
     ])
     train_features = pipeline.fit_transform(train_features)
+    test_features = pipeline.transform(test_features)
     features_count_before = len(feature_names)
     feature_names = feature_names[pipeline.named_steps['variance_threshold'].get_support(indices=True)]
     removed_features_count = features_count_before - len(feature_names)
