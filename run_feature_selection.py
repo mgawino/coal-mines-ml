@@ -12,8 +12,10 @@ from joblib import Parallel, delayed
 from sklearn.datasets import make_classification
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectFromModel, VarianceThreshold
-from sklearn.preprocessing import Imputer
-from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import Imputer, StandardScaler
+from sklearn.random_projection import GaussianRandomProjection
 
 from reader import DataReader
 from feature_extractor import FeatureExtractor
@@ -21,10 +23,11 @@ from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
+import scipy
 from utils import timeit, RESULTS_PATH
 from wrappers import gini_index_wrapper, mrmr_wrapper
 
-MAX_FEATURES = 40
+MAX_FEATURES = 14
 
 
 def class_to_binary(x):
@@ -71,18 +74,26 @@ def print_labels_summary(y_train, y_test):
         print('Label: {} Train: {} Test: {}'.format(label_ix, Counter(y_train_label), Counter(y_test_label)))
 
 
-def save_results(prefix, y_true, predictions, score_fun, feature_num,
+def save_results(prefix, classifier, y_true, predictions, score_fun, feature_num,
                  label_ix, select_time, clasiff_time, selected_features=None):
     auc_score = roc_auc_score(y_true, predictions)
-    result = {
+    if hasattr(classifier, 'estimator'):
+        result = {
+          'model': classifier.estimator.__class__.__name__,
+          'best_params': classifier.best_params_
+        }
+    else:
+        result = {
+            'model': classifier.__class__.__name__
+        }
+    result.update({
         'AUC': round(auc_score, 6),
-        'model': 'SVM',
         'classif_time': round(clasiff_time),
         'select_time': round(select_time),
         'feature_num': feature_num,
         'score_fun': score_fun,
         'label_ix': label_ix
-    }
+    })
     if selected_features is not None:
         selected_features = sorted(selected_features)
         result['selected_features'] = selected_features
@@ -91,39 +102,53 @@ def save_results(prefix, y_true, predictions, score_fun, feature_num,
         json.dump(result, output)
 
 
+def make_classifiers():
+    svc_params = {
+        'C': scipy.stats.expon(scale=100),
+        'gamma': scipy.stats.expon(scale=.1),
+        'kernel': ['rbf']
+    }
+    return [
+        RandomizedSearchCV(SVC(cache_size=500), svc_params, cv=2, n_iter=10),
+        RandomForestClassifier(n_estimators=500)
+    ]
+
+
 def validate_ranking_selection(selection_transformer, train_features, y_train, test_features, y_test,
                                feature_names, label_ix):
-    print('Started selection: {}'.format(str(selection_transformer)))
+    print('Started selection: {} on label: {}'.format(str(selection_transformer), label_ix))
     selection_duration, _ = timeit(selection_transformer.fit, train_features, y_train)
-    for feature_num in [5, 10, 20, 40]:
+    for feature_num in [3, 5, 7, 9, 11, 14]:
         selection_transformer.k = feature_num
         X_train = selection_transformer.transform(train_features)
         assert X_train.shape[1] == feature_num
         X_test = selection_transformer.transform(test_features)
         assert X_train.shape[1] == feature_num
-        svc = SVC()
-        classification_duration, _ = timeit(svc.fit, X_train, y_train)
-        predictions = svc.predict(X_test)
         selected_features = feature_names[selection_transformer.get_support(indices=True)]
-        save_results(
-            prefix='ranking',
-            y_true=y_test,
-            predictions=predictions,
-            score_fun=selection_transformer.score_func.__name__,
-            feature_num=feature_num,
-            label_ix=label_ix,
-            select_time=selection_duration,
-            clasiff_time=classification_duration,
-            selected_features=selected_features
-        )
+        for classifier in make_classifiers():
+            classification_duration, _ = timeit(classifier.fit, X_train, y_train)
+            predictions = classifier.predict(X_test)
+            save_results(
+                prefix='ranking',
+                classifier=classifier,
+                y_true=y_test,
+                predictions=predictions,
+                score_fun=selection_transformer.score_func.__name__,
+                feature_num=feature_num,
+                label_ix=label_ix,
+                select_time=selection_duration,
+                clasiff_time=classification_duration,
+                selected_features=selected_features
+            )
+    print('Finished selection: {} on label: {}'.format(str(selection_transformer), label_ix))
 
 
 def run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names):
     ranking_selectors = [
+        # SelectKBest(mrmr_wrapper, k=MAX_FEATURES)
+        SelectKBest(gini_index_wrapper, k=MAX_FEATURES),
         SelectKBest(f_classif, k=MAX_FEATURES),
         SelectKBest(mutual_info_classif, k=MAX_FEATURES),
-        SelectKBest(gini_index_wrapper, k=MAX_FEATURES),
-        SelectKBest(mrmr_wrapper, k=MAX_FEATURES)
     ]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
         delayed(validate_ranking_selection)(selection_transformer, train_features, y_train[:, label_ix], test_features,
@@ -135,7 +160,7 @@ def run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, 
 
 def validate_dimensionality_reduction(reduction_transformer_cls, train_features, y_train, test_features, y_test,
                                       label_ix):
-    print('Started reduction: {}'.format(reduction_transformer_cls.__name__))
+    print('Started reduction: {} on label: {}'.format(reduction_transformer_cls.__name__, label_ix))
     for n_components in [5, 10, 20, 40]:
         reduction_transformer = reduction_transformer_cls(n_components=n_components)
         selection_duration, _ = timeit(reduction_transformer.fit, train_features, y_train)
@@ -143,26 +168,27 @@ def validate_dimensionality_reduction(reduction_transformer_cls, train_features,
         assert X_train.shape[1] == n_components
         X_test = reduction_transformer.transform(test_features)
         assert X_train.shape[1] == n_components
-        svc = SVC()
-        classification_duration, _ = timeit(svc.fit, X_train, y_train)
-        predictions = svc.predict(X_test)
-        save_results(
-            prefix='reduction',
-            y_true=y_test,
-            predictions=predictions,
-            score_fun=reduction_transformer_cls.__name__,
-            feature_num=n_components,
-            label_ix=label_ix,
-            select_time=selection_duration,
-            clasiff_time=classification_duration,
-        )
+        for classifier in make_classifiers():
+            classification_duration, _ = timeit(classifier.fit, X_train, y_train)
+            predictions = classifier.predict(X_test)
+            save_results(
+                prefix='reduction',
+                classifier=classifier,
+                y_true=y_test,
+                predictions=predictions,
+                score_fun=reduction_transformer_cls.__name__,
+                feature_num=n_components,
+                label_ix=label_ix,
+                select_time=selection_duration,
+                clasiff_time=classification_duration,
+            )
+    print('Finished reduction: {} on label: {}'.format(str(reduction_transformer_cls.__name__), label_ix))
 
 
 def run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test):
     dimensionality_reduction_selectors = [
         PCA,
         GaussianRandomProjection,
-        SparseRandomProjection
     ]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
         delayed(validate_dimensionality_reduction)(selection_transformer, train_features, y_train[:, label_ix],
@@ -173,33 +199,35 @@ def run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_f
 
 
 def validate_model_selectors(model_selector, train_features, y_train, test_features, y_test, feature_names, label_ix):
-    print('Started model selection: {}'.format(str(model_selector)))
+    print('Started model selection: {} on label: {}'.format(str(model_selector.__class__.__name__), label_ix))
     selection_duration, _ = timeit(model_selector.fit, train_features, y_train)
     for feature_threshold in ['mean', '2 * mean', '3 * mean']:
         selector = SelectFromModel(model_selector, prefit=True, threshold=feature_threshold)
         X_train = selector.transform(train_features)
         X_test = selector.transform(test_features)
-        svc = SVC()
-        classification_duration, _ = timeit(svc.fit, X_train, y_train)
-        predictions = svc.predict(X_test)
         selected_features = feature_names[selector.get_support(indices=True)]
-        save_results(
-            prefix='model',
-            y_true=y_test,
-            predictions=predictions,
-            score_fun=model_selector.__class__.__name__,
-            feature_num=len(selected_features),
-            label_ix=label_ix,
-            select_time=selection_duration,
-            clasiff_time=classification_duration,
-            selected_features=selected_features
-        )
+        for classifier in make_classifiers():
+            classification_duration, _ = timeit(classifier.fit, X_train, y_train)
+            predictions = classifier.predict(X_test)
+            save_results(
+                prefix='model',
+                classifier=classifier,
+                y_true=y_test,
+                predictions=predictions,
+                score_fun=model_selector.__class__.__name__,
+                feature_num=len(selected_features),
+                label_ix=label_ix,
+                select_time=selection_duration,
+                clasiff_time=classification_duration,
+                selected_features=selected_features
+            )
+    print('Finished model selection: {} on label: {}'.format(str(model_selector), label_ix))
 
 
 def run_model_selection_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names):
     model_selectors = [
-        RandomForestClassifier(n_estimators=100),
-        ExtraTreesClassifier(n_estimators=100, n_jobs=3)
+        RandomForestClassifier(n_estimators=500),
+        ExtraTreesClassifier(n_estimators=500)
     ]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
         delayed(validate_model_selectors)(model_selector, train_features, y_train[:, label_ix],
@@ -211,14 +239,14 @@ def run_model_selection_methods(n_jobs, train_features, y_train, test_features, 
 
 def pre_filter(train_features, test_features, feature_names):
     print('Pre filtering data...')
-    imputer = Imputer()
-    train_features = imputer.fit_transform(train_features)
-    test_features = imputer.transform(test_features)
-    filter_transformer = VarianceThreshold(threshold=0.)  # remove features with Var == 0
-    train_features = filter_transformer.fit_transform(train_features)
-    test_features = filter_transformer.transform(test_features)
+    pipeline = Pipeline([
+        ('imputer', Imputer()),
+        ('variance_threshold', VarianceThreshold(threshold=0.)),
+        ('scaler', StandardScaler())
+    ])
+    train_features = pipeline.fit_transform(train_features)
     features_count_before = len(feature_names)
-    feature_names = feature_names[filter_transformer.get_support(indices=True)]
+    feature_names = feature_names[pipeline.named_steps['variance_threshold'].get_support(indices=True)]
     removed_features_count = features_count_before - len(feature_names)
     assert train_features.shape[1] == test_features.shape[1] == len(feature_names)
     click.secho('Removed {} features'.format(removed_features_count), fg='red')
@@ -234,8 +262,8 @@ def main(clear_cache, n_jobs, test):
     print_labels_summary(y_train, y_test)
     train_features, test_features, feature_names = pre_filter(train_features, test_features, feature_names)
     run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
-    run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test)
     run_model_selection_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
+    run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test)
 
 if __name__ == '__main__':
     main()
