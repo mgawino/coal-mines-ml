@@ -12,6 +12,7 @@ from joblib import Parallel, delayed
 from sklearn.datasets import make_classification
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectFromModel, VarianceThreshold
+from sklearn.preprocessing import Imputer
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
 
 from reader import DataReader
@@ -64,7 +65,6 @@ def generate_data():
 
 
 def print_labels_summary(y_train, y_test):
-    assert y_train.shape == y_test.shape
     for label_ix in range(y_train.shape[1]):
         y_train_label = y_train[:, label_ix]
         y_test_label = y_test[:, label_ix]
@@ -209,13 +209,19 @@ def run_model_selection_methods(n_jobs, train_features, y_train, test_features, 
     )
 
 
-def pre_filter(self, train_features, test_features):
+def pre_filter(train_features, test_features, feature_names):
+    print('Pre filtering data...')
+    imputer = Imputer()
+    train_features = imputer.fit_transform(train_features)
+    test_features = imputer.transform(test_features)
     filter_transformer = VarianceThreshold(threshold=0.)  # remove features with Var == 0
     train_features = filter_transformer.fit_transform(train_features)
     test_features = filter_transformer.transform(test_features)
-    feature_names = self.feature_names[self.filter_transformer.get_support(indices=True)]
-    removed_features_count = len(self.feature_names) - len(feature_names)
-    click.secho('Removed {} const features'.format(removed_features_count), fg='red')
+    features_count_before = len(feature_names)
+    feature_names = feature_names[filter_transformer.get_support(indices=True)]
+    removed_features_count = features_count_before - len(feature_names)
+    assert train_features.shape[1] == test_features.shape[1] == len(feature_names)
+    click.secho('Removed {} features'.format(removed_features_count), fg='red')
     return train_features, test_features, feature_names
 
 
@@ -226,6 +232,7 @@ def pre_filter(self, train_features, test_features):
 def main(clear_cache, n_jobs, test):
     train_features, y_train, test_features, y_test, feature_names = load_data(clear_cache, n_jobs, test)
     print_labels_summary(y_train, y_test)
+    train_features, test_features, feature_names = pre_filter(train_features, test_features, feature_names)
     run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
     run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test)
     run_model_selection_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
