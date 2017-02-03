@@ -5,7 +5,7 @@ from sklearn.base import TransformerMixin
 from utils import measure_time
 
 
-class SensorsDataTransformer(TransformerMixin):
+class SensorsTransformer(TransformerMixin):
 
     def __init__(self, function, **function_kwargs):
         self.function = function

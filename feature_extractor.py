@@ -4,7 +4,7 @@ import os
 import click
 import numpy as np
 from sklearn.pipeline import Pipeline, FeatureUnion
-from transformer import SensorsDataTransformer
+from transformer import SensorsTransformer
 from tsfresh.feature_extraction import feature_calculators
 from reader import DataReader
 
@@ -17,45 +17,44 @@ class FeatureExtractor:
     def __init__(self, n_jobs):
         self.transformer = Pipeline([
             ('features', FeatureUnion([
-                # ('sample_entropy', SensorsDataTransformer(feature_calculators.sample_entropy)),  # inf
                 # ('number_peaks_5', SensorsDataTransformer(feature_calculators.number_peaks, n=5)),  # 640
                 # ('number_peaks_10', SensorsDataTransformer(feature_calculators.number_peaks, n=10)),  # 870
                 # ('number_peaks_20', SensorsDataTransformer(feature_calculators.number_peaks, n=20)),  # 1200
-                ('count_above_mean', SensorsDataTransformer(feature_calculators.count_above_mean)),  # 500
-                ('count_below_mean', SensorsDataTransformer(feature_calculators.count_below_mean)),  # 500
-                ('autocorrelation_10', SensorsDataTransformer(feature_calculators.autocorrelation, lag=10)),  # 200
-                ('autocorrelation_20', SensorsDataTransformer(feature_calculators.autocorrelation, lag=20)),  # 200
-                ('autocorrelation_50', SensorsDataTransformer(feature_calculators.autocorrelation, lag=50)),  # 200
-                ('max', SensorsDataTransformer(max)),  # 200
-                ('min', SensorsDataTransformer(min)),  # 200
-                ('mean_autocorrelation', SensorsDataTransformer(feature_calculators.mean_autocorrelation)),  # 117
-                ('quantile_0.2', SensorsDataTransformer(feature_calculators.quantile, q=0.2)),  # 130
-                ('quantile_0.4', SensorsDataTransformer(feature_calculators.quantile, q=0.4)),  # 130
-                ('quantile_0.6', SensorsDataTransformer(feature_calculators.quantile, q=0.6)),  # 130
-                ('quantile_0.8', SensorsDataTransformer(feature_calculators.quantile, q=0.8)),  # 130
-                ('skewness', SensorsDataTransformer(feature_calculators.skewness)),  # 113
-                ('kurtosis', SensorsDataTransformer(feature_calculators.kurtosis)),  # 120
-                ('longest_strike_below_mean', SensorsDataTransformer(feature_calculators.longest_strike_below_mean)),
-                ('longest_strike_above_mean', SensorsDataTransformer(feature_calculators.longest_strike_above_mean)),
-                ('last_location_of_maximum', SensorsDataTransformer(feature_calculators.last_location_of_maximum)),
-                ('first_location_of_maximum', SensorsDataTransformer(feature_calculators.first_location_of_maximum)),
-                ('last_location_of_minimum', SensorsDataTransformer(feature_calculators.last_location_of_minimum)),
-                ('first_location_of_minimum', SensorsDataTransformer(feature_calculators.first_location_of_minimum)),
-                ('binned_entropy_5', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=5)),
-                ('binned_entropy_10', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=10)),
-                ('binned_entropy_20', SensorsDataTransformer(feature_calculators.binned_entropy, max_bins=20)),
-                ('mean_second_derivate_central', SensorsDataTransformer(feature_calculators.mean_second_derivate_central)),
-                ('mean', SensorsDataTransformer(feature_calculators.mean)),
-                ('median', SensorsDataTransformer(feature_calculators.median)),
-                ('variance', SensorsDataTransformer(feature_calculators.variance)),
-                ('std', SensorsDataTransformer(feature_calculators.standard_deviation)),
-                ('large_std', SensorsDataTransformer(feature_calculators.large_standard_deviation, r=0.5)),
-                ('var_larger_than_std', SensorsDataTransformer(feature_calculators.variance_larger_than_standard_deviation)),
-                ('sum_values', SensorsDataTransformer(feature_calculators.sum_values)),
-                ('mean_change', SensorsDataTransformer(feature_calculators.mean_change)),
-                ('mean_abs_change', SensorsDataTransformer(feature_calculators.mean_abs_change)),
-                ('absolute_sum_of_changes', SensorsDataTransformer(feature_calculators.absolute_sum_of_changes)),
-                ('abs_energy', SensorsDataTransformer(feature_calculators.abs_energy)),
+                ('count_above_mean', SensorsTransformer(feature_calculators.count_above_mean)),  # 500
+                ('count_below_mean', SensorsTransformer(feature_calculators.count_below_mean)),  # 500
+                ('autocorrelation_10', SensorsTransformer(feature_calculators.autocorrelation, lag=10)),  # 200
+                ('autocorrelation_20', SensorsTransformer(feature_calculators.autocorrelation, lag=20)),  # 200
+                ('autocorrelation_50', SensorsTransformer(feature_calculators.autocorrelation, lag=50)),  # 200
+                ('max', SensorsTransformer(max)),  # 200
+                ('min', SensorsTransformer(min)),  # 200
+                ('mean_autocorrelation', SensorsTransformer(feature_calculators.mean_autocorrelation)),  # 117
+                ('quantile_0.2', SensorsTransformer(feature_calculators.quantile, q=0.2)),  # 130
+                ('quantile_0.4', SensorsTransformer(feature_calculators.quantile, q=0.4)),  # 130
+                ('quantile_0.6', SensorsTransformer(feature_calculators.quantile, q=0.6)),  # 130
+                ('quantile_0.8', SensorsTransformer(feature_calculators.quantile, q=0.8)),  # 130
+                ('skewness', SensorsTransformer(feature_calculators.skewness)),  # 113
+                ('kurtosis', SensorsTransformer(feature_calculators.kurtosis)),  # 120
+                ('longest_strike_below_mean', SensorsTransformer(feature_calculators.longest_strike_below_mean)),
+                ('longest_strike_above_mean', SensorsTransformer(feature_calculators.longest_strike_above_mean)),
+                ('last_location_of_maximum', SensorsTransformer(feature_calculators.last_location_of_maximum)),
+                ('first_location_of_maximum', SensorsTransformer(feature_calculators.first_location_of_maximum)),
+                ('last_location_of_minimum', SensorsTransformer(feature_calculators.last_location_of_minimum)),
+                ('first_location_of_minimum', SensorsTransformer(feature_calculators.first_location_of_minimum)),
+                ('binned_entropy_5', SensorsTransformer(feature_calculators.binned_entropy, max_bins=5)),
+                ('binned_entropy_10', SensorsTransformer(feature_calculators.binned_entropy, max_bins=10)),
+                ('binned_entropy_20', SensorsTransformer(feature_calculators.binned_entropy, max_bins=20)),
+                ('mean_second_derivate_central', SensorsTransformer(feature_calculators.mean_second_derivate_central)),
+                ('mean', SensorsTransformer(feature_calculators.mean)),
+                ('median', SensorsTransformer(feature_calculators.median)),
+                ('variance', SensorsTransformer(feature_calculators.variance)),
+                ('std', SensorsTransformer(feature_calculators.standard_deviation)),
+                ('large_std', SensorsTransformer(feature_calculators.large_standard_deviation, r=0.5)),
+                ('var_larger_than_std', SensorsTransformer(feature_calculators.variance_larger_than_standard_deviation)),
+                ('sum_values', SensorsTransformer(feature_calculators.sum_values)),
+                ('mean_change', SensorsTransformer(feature_calculators.mean_change)),
+                ('mean_abs_change', SensorsTransformer(feature_calculators.mean_abs_change)),
+                ('absolute_sum_of_changes', SensorsTransformer(feature_calculators.absolute_sum_of_changes)),
+                ('abs_energy', SensorsTransformer(feature_calculators.abs_energy)),
                 # ('fft_coefficient', SensorsDataTransformer(feature_calculators.fft_coefficient)),
                 # ('index_mass_quantile', SensorsDataTransformer(feature_calculators.index_mass_quantile)),
                 # ('number_cwt_peaks', SensorsDataTransformer(feature_calculators.number_cwt_peaks)),

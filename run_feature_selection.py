@@ -25,7 +25,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
 import scipy
 from utils import timeit, RESULTS_PATH
-from wrappers import gini_index_wrapper, mrmr_wrapper
+from wrappers import gini_index_wrapper
 
 MAX_FEATURES = 14
 
@@ -88,11 +88,11 @@ def save_results(prefix, classifier, y_true, predictions, score_fun, feature_num
         }
     result.update({
         'AUC': round(auc_score, 6),
-        'classif_time': round(clasiff_time),
-        'select_time': round(select_time),
-        'feature_num': feature_num,
+        'c_time': round(clasiff_time),
+        's_time': round(select_time),
+        'f_num': feature_num,
         'score_fun': score_fun,
-        'label_ix': label_ix
+        'label': label_ix
     })
     if selected_features is not None:
         selected_features = sorted(selected_features)
@@ -145,10 +145,9 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
 
 def run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names):
     ranking_selectors = [
-        # SelectKBest(mrmr_wrapper, k=MAX_FEATURES)
-        SelectKBest(gini_index_wrapper, k=MAX_FEATURES),
-        SelectKBest(f_classif, k=MAX_FEATURES),
-        SelectKBest(mutual_info_classif, k=MAX_FEATURES),
+        SelectKBest(gini_index_wrapper),
+        SelectKBest(f_classif),
+        SelectKBest(mutual_info_classif),
     ]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
         delayed(validate_ranking_selection)(selection_transformer, train_features, y_train[:, label_ix], test_features,
