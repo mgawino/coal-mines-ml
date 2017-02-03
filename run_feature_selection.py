@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import pickle
 from collections import Counter
 
 from uuid import uuid4
@@ -24,10 +25,8 @@ from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classi
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC
 import scipy
-from utils import timeit, RESULTS_PATH
+from utils import timeit, RESULTS_PATH, MODEL_CACHE_PATH
 from wrappers import gini_index_wrapper
-
-MAX_FEATURES = 14
 
 
 def class_to_binary(x):
@@ -114,10 +113,33 @@ def make_classifiers():
     ]
 
 
+def fit_or_load_from_cache(model, X_train, y_train, label_ix):
+    if isinstance(model, SelectKBest):
+        model_file_name = '{}_{}'.format(label_ix, model.score_func.__name__)
+    else:
+        model_file_name = '{}_{}'.format(label_ix, model.__class__.__name__)
+    model_file_path = os.path.join(MODEL_CACHE_PATH, model_file_name)
+    if os.path.exists(model_file_path):
+        print('Loaded model from cache: {}'.format(model_file_name))
+        with open(model_file_path, 'rb') as model_file:
+            model, duration = pickle.load(model_file)
+        return model, duration
+    duration = timeit(model.fit, X_train, y_train)
+    with open(model_file_path, 'wb') as model_file:
+        pickle.dump((model, duration), model_file)
+    return model, duration
+
+
 def validate_ranking_selection(selection_transformer, train_features, y_train, test_features, y_test,
                                feature_names, label_ix):
     print('Started selection: {} on label: {}'.format(str(selection_transformer), label_ix))
-    selection_duration, _ = timeit(selection_transformer.fit, train_features, y_train)
+    selection_transformer, selection_duration = fit_or_load_from_cache(
+        selection_transformer,
+        train_features,
+        y_train,
+        label_ix
+    )
+    assert len(selection_transformer.scores_) == train_features.shape[1]
     for feature_num in [3, 5, 7, 9, 11, 14]:
         selection_transformer.k = feature_num
         X_train = selection_transformer.transform(train_features)
@@ -126,7 +148,7 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
         assert X_train.shape[1] == feature_num
         selected_features = feature_names[selection_transformer.get_support(indices=True)]
         for classifier in make_classifiers():
-            classification_duration, _ = timeit(classifier.fit, X_train, y_train)
+            classification_duration = timeit(classifier.fit, X_train, y_train)
             predictions = classifier.predict(X_test)
             save_results(
                 prefix='ranking',
@@ -162,13 +184,13 @@ def validate_dimensionality_reduction(reduction_transformer_cls, train_features,
     print('Started reduction: {} on label: {}'.format(reduction_transformer_cls.__name__, label_ix))
     for n_components in [5, 10, 20, 40]:
         reduction_transformer = reduction_transformer_cls(n_components=n_components)
-        selection_duration, _ = timeit(reduction_transformer.fit, train_features, y_train)
+        selection_duration = timeit(reduction_transformer.fit, train_features, y_train)
         X_train = reduction_transformer.transform(train_features)
         assert X_train.shape[1] == n_components
         X_test = reduction_transformer.transform(test_features)
         assert X_train.shape[1] == n_components
         for classifier in make_classifiers():
-            classification_duration, _ = timeit(classifier.fit, X_train, y_train)
+            classification_duration = timeit(classifier.fit, X_train, y_train)
             predictions = classifier.predict(X_test)
             save_results(
                 prefix='reduction',
@@ -199,14 +221,14 @@ def run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_f
 
 def validate_model_selectors(model_selector, train_features, y_train, test_features, y_test, feature_names, label_ix):
     print('Started model selection: {} on label: {}'.format(str(model_selector.__class__.__name__), label_ix))
-    selection_duration, _ = timeit(model_selector.fit, train_features, y_train)
-    for feature_threshold in ['mean', '2 * mean', '3 * mean']:
+    model_selector, selection_duration = fit_or_load_from_cache(model_selector, train_features, y_train, label_ix)
+    for feature_threshold in ['mean']:
         selector = SelectFromModel(model_selector, prefit=True, threshold=feature_threshold)
         X_train = selector.transform(train_features)
         X_test = selector.transform(test_features)
         selected_features = feature_names[selector.get_support(indices=True)]
         for classifier in make_classifiers():
-            classification_duration, _ = timeit(classifier.fit, X_train, y_train)
+            classification_duration = timeit(classifier.fit, X_train, y_train)
             predictions = classifier.predict(X_test)
             save_results(
                 prefix='model',

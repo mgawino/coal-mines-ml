@@ -6,6 +6,7 @@ import click
 
 PROJECT_PATH = os.path.dirname(__file__)
 RESULTS_PATH = os.path.join(PROJECT_PATH, 'results')
+MODEL_CACHE_PATH = os.path.join(PROJECT_PATH, 'model_cache')
 
 
 def measure_time(context=None):
@@ -24,6 +25,6 @@ def measure_time(context=None):
 
 def timeit(fun, *args, **kwargs):
     start_time = time.process_time()
-    result = fun(*args, **kwargs)
+    fun(*args, **kwargs)
     duration = time.process_time() - start_time
-    return duration, result
+    return duration

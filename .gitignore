@@ -1,9 +1,10 @@
 .idea
-out/
 *.iml
 data/*.csv
 __pycache__
 venv
-.ipynb_checkpoints
 *.pyc
 results/*
+!results/.gitkeep
+model_cache/*
+!model_cache/.gitkeep
