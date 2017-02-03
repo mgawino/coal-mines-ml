@@ -112,7 +112,7 @@ class FeatureExtractor:
              SensorMultiTransformer(fft_coefficient, param=[{'coeff': coeff} for coeff in range(10)]))
         )
 
-        self.transformer = CustomFeatureUnion(feature_transformers)
+        self.transformer = CustomFeatureUnion(feature_transformers, n_jobs=n_jobs)
         sensor_names = DataReader.get_sensor_names()
         for _, trans in self.transformer.transformer_list:
             trans.set_sensor_names(sensor_names)
