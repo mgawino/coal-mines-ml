@@ -39,7 +39,7 @@ def load_data(clear_cache, n_jobs, test):
     if test:
         return generate_data()
     feature_extractor = FeatureExtractor(n_jobs)
-    if clear_cache:
+    if clear_cache and click.confirm('Are you sure you want to clear cache?'):
         feature_extractor.clear_cache()
     train_features, test_features, feature_names = feature_extractor.load_features()
     y_train = DataReader.read_training_labels()
@@ -111,7 +111,7 @@ def make_classifiers():
     }
     return [
         RandomizedSearchCV(SVC(cache_size=500), svc_params, cv=2, n_iter=10),
-        RandomForestClassifier(n_estimators=500)
+        RandomForestClassifier(n_estimators=700)
     ]
 
 
@@ -184,7 +184,7 @@ def iter_ranking_methods(train_features, y_train, test_features, y_test, feature
 def validate_dimensionality_reduction(reduction_transformer_cls, train_features, y_train, test_features, y_test,
                                       label_ix):
     print('Started reduction: {} on label: {}'.format(reduction_transformer_cls.__name__, label_ix))
-    for n_components in [5, 10, 20, 40]:
+    for n_components in [10, 20]:
         reduction_transformer = reduction_transformer_cls(n_components=n_components)
         selection_duration = timeit(reduction_transformer.fit, train_features, y_train)
         X_train = reduction_transformer.transform(train_features)
@@ -249,8 +249,8 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
 
 def iter_model_selection_methods(train_features, y_train, test_features, y_test, feature_names):
     model_selectors = [
-        RandomForestClassifier(n_estimators=500),
-        ExtraTreesClassifier(n_estimators=500)
+        RandomForestClassifier(n_estimators=700),
+        ExtraTreesClassifier(n_estimators=700)
     ]
     yield from (
         delayed(validate_model_selectors)(model_selector, train_features, y_train[:, label_ix],
@@ -263,7 +263,7 @@ def iter_model_selection_methods(train_features, y_train, test_features, y_test,
 def pre_filter(train_features, test_features, feature_names):
     print('Pre filtering data...')
     pipeline = Pipeline([
-        ('imputer', Imputer()),
+        ('imputer', Imputer(strategy='most_frequent')),
         ('variance_threshold', VarianceThreshold(threshold=0.)),
         ('scaler', StandardScaler())
     ])
@@ -278,7 +278,7 @@ def pre_filter(train_features, test_features, feature_names):
 
 
 @click.command()
-@click.option('--clear-cache', '-cc', is_flag=True, help='Clear features cache')
+@click.option('--clear-cache', '-cc', is_flag=True)
 @click.option('--n-jobs', '-j', type=click.INT, help='Feature extraction jobs', default='3')
 @click.option('--test', '-t', is_flag=True)
 def main(clear_cache, n_jobs, test):

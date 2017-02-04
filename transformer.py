@@ -45,7 +45,7 @@ class SensorMultiTransformer(SensorTransformer):
         assert self.sensor_names is not None
         feature_names = []
         for sensor_name in self.sensor_names:
-            res = self.function([0] * 30, c=sensor_name, **self.function_kwargs)
+            res = self.function([0], c=sensor_name, **self.function_kwargs)
             feature_names.extend(list(res.index))
         return feature_names
 

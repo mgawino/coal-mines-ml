@@ -158,7 +158,7 @@ class FeatureExtractor:
         X_test = DataReader.read_test_data()
         assert X_test.shape == (X_test.shape[0], DataReader.SENSOR_NUM, DataReader.SENSOR_DATA_COUNT_IN_ROW)
         test_features = self.transformer.transform(X_test)
-        assert train_features.shape == (X_train.shape[0], len(feature_names))
+        assert test_features.shape == (test_features.shape[0], len(feature_names))
         return train_features, test_features, feature_names
 
     def load_features(self):
