@@ -6,6 +6,8 @@ from collections import Counter
 
 from uuid import uuid4
 
+import itertools
+
 import numpy as np
 
 import click
@@ -165,13 +167,13 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
     print('Finished selection: {} on label: {}'.format(str(selection_transformer), label_ix))
 
 
-def run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names):
+def iter_ranking_methods(train_features, y_train, test_features, y_test, feature_names):
     ranking_selectors = [
         SelectKBest(gini_index_wrapper),
         SelectKBest(f_classif),
         SelectKBest(mutual_info_classif),
     ]
-    Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
+    yield from (
         delayed(validate_ranking_selection)(selection_transformer, train_features, y_train[:, label_ix], test_features,
                                             y_test[:, label_ix], feature_names, label_ix)
         for selection_transformer in ranking_selectors
@@ -206,12 +208,12 @@ def validate_dimensionality_reduction(reduction_transformer_cls, train_features,
     print('Finished reduction: {} on label: {}'.format(str(reduction_transformer_cls.__name__), label_ix))
 
 
-def run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test):
+def iter_dimensionality_reduction_methods(train_features, y_train, test_features, y_test, _):
     dimensionality_reduction_selectors = [
         PCA,
         GaussianRandomProjection,
     ]
-    Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
+    yield from (
         delayed(validate_dimensionality_reduction)(selection_transformer, train_features, y_train[:, label_ix],
                                                    test_features, y_test[:, label_ix], label_ix)
         for selection_transformer in dimensionality_reduction_selectors
@@ -245,12 +247,12 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
     print('Finished model selection: {} on label: {}'.format(str(model_selector), label_ix))
 
 
-def run_model_selection_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names):
+def iter_model_selection_methods(train_features, y_train, test_features, y_test, feature_names):
     model_selectors = [
         RandomForestClassifier(n_estimators=500),
         ExtraTreesClassifier(n_estimators=500)
     ]
-    Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(
+    yield from (
         delayed(validate_model_selectors)(model_selector, train_features, y_train[:, label_ix],
                                           test_features, y_test[:, label_ix], feature_names, label_ix)
         for model_selector in model_selectors
@@ -283,9 +285,13 @@ def main(clear_cache, n_jobs, test):
     train_features, y_train, test_features, y_test, feature_names = load_data(clear_cache, n_jobs, test)
     print_labels_summary(y_train, y_test)
     train_features, test_features, feature_names = pre_filter(train_features, test_features, feature_names)
-    run_ranking_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
-    run_model_selection_methods(n_jobs, train_features, y_train, test_features, y_test, feature_names)
-    run_dimensionality_reduction_methods(n_jobs, train_features, y_train, test_features, y_test)
+    methods = [
+        iter_ranking_methods,
+        iter_model_selection_methods,
+        iter_dimensionality_reduction_methods
+    ]
+    jobs = [method(train_features, y_train, test_features, y_test, feature_names) for method in methods]
+    Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(itertools.chain(*jobs))
 
 if __name__ == '__main__':
     main()
