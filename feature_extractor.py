@@ -55,7 +55,7 @@ class FeatureExtractor:
         for n in [1, 3, 5]:
             feature_transformers.append(('number_peaks_{}'.format(n), SensorTransformer(number_peaks, n=n)))
             feature_transformers.append(('large_num_of_peaks_{}'.format(n), SensorTransformer(large_number_of_peaks, n=n)))
-            feature_transformers.append(('cwt_peaks_{}'.format(n), SensorTransformer(number_cwt_peaks, n=n)))
+            # feature_transformers.append(('cwt_peaks_{}'.format(n), SensorTransformer(number_cwt_peaks, n=n)))
 
         for lag in range(1, 4):
             transformer = SensorTransformer(time_reversal_asymmetry_statistic, lag=lag)
@@ -84,17 +84,19 @@ class FeatureExtractor:
                  SensorTransformer(mean_abs_change_quantiles, ql=ql, qh=qh))
             )
 
-        for r in [.1, .3, .5, .7, .9]:
-            feature_transformers.append(
-                ('approximate_entropy_{}'.format(r), SensorTransformer(approximate_entropy, m=2, r=r))
-            )
+        # for r in [.1, .3, .5, .7, .9]:
+        #     feature_transformers.append(
+        #         ('approximate_entropy_{}'.format(r), SensorTransformer(approximate_entropy, m=2, r=r))
+        #     )
 
-        feature_transformers.append(
+        feature_transformers.insert(
+            0,
             ('ar_coefficient',
              SensorMultiTransformer(ar_coefficient, param=[{'coeff': coeff, 'k': 10} for coeff in range(5)]))
         )
 
-        feature_transformers.append(
+        feature_transformers.insert(
+            0,
             ('cwt_coeff',
              SensorMultiTransformer(
                  cwt_coefficients,
@@ -106,7 +108,6 @@ class FeatureExtractor:
             ('spkt_welch_density',
              SensorMultiTransformer(spkt_welch_density, param=[{'coeff': coeff} for coeff in [2, 5, 8]]))
         )
-
         feature_transformers.append(
             ('fft_coefficent',
              SensorMultiTransformer(fft_coefficient, param=[{'coeff': coeff} for coeff in range(10)]))
@@ -149,11 +150,15 @@ class FeatureExtractor:
         for X_train_partial in DataReader.iter_train_files_data():
             X_train_partials.append(X_train_partial)
         X_train = np.concatenate(X_train_partials, axis=0)
+        rows = sum(partial.shape[0] for partial in X_train_partials)
+        assert X_train.shape == (rows, DataReader.SENSOR_NUM, DataReader.SENSOR_DATA_COUNT_IN_ROW)
         train_features = self.transformer.transform(X_train)
         feature_names = np.asarray(self.transformer.get_feature_names())
-        assert train_features.shape[1] == len(feature_names)
+        assert train_features.shape == (rows, len(feature_names))
         X_test = DataReader.read_test_data()
+        assert X_test.shape == (X_test.shape[0], DataReader.SENSOR_NUM, DataReader.SENSOR_DATA_COUNT_IN_ROW)
         test_features = self.transformer.transform(X_test)
+        assert train_features.shape == (X_train.shape[0], len(feature_names))
         return train_features, test_features, feature_names
 
     def load_features(self):
@@ -165,7 +170,6 @@ class FeatureExtractor:
             train_features, test_features, feature_names = self._transform_data_to_features()
             self._cache_arrays(train_features, test_features, feature_names)
 
-        assert train_features.shape[1] == test_features.shape[1] == len(feature_names)
         click.secho('Train features shape: {}'.format(train_features.shape))
         click.secho('Test features shape: {}'.format(test_features.shape))
         return train_features, test_features, feature_names

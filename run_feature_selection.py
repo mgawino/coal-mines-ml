@@ -42,7 +42,7 @@ def load_data(clear_cache, n_jobs, test):
     train_features, test_features, feature_names = feature_extractor.load_features()
     y_train = DataReader.read_training_labels()
     y_test = DataReader.read_test_labels()
-    assert train_features.shape[0] == y_train.shape[0]
+    assert train_features.shape[0] == y_train.shape[0], (train_features.shape, y_train.shape)
     assert test_features.shape[0] == y_test.shape[0]
     class_to_binary_vec = np.vectorize(class_to_binary)
     y_train = class_to_binary_vec(y_train)
