@@ -25,7 +25,7 @@ from feature_extractor import FeatureExtractor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
 from sklearn.metrics import roc_auc_score
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 import scipy
 from utils import timeit, RESULTS_PATH, MODEL_CACHE_PATH
 from wrappers import gini_index_wrapper
@@ -55,7 +55,7 @@ def load_data(clear_cache, n_jobs, test):
 def generate_data():
     n_features = 100
     X, y = make_classification(
-        n_samples=100,
+        n_samples=20,
         n_features=n_features,
         n_informative=7,
         n_redundant=0,
@@ -104,26 +104,35 @@ def save_results(prefix, classifier, y_true, predictions, score_fun, feature_num
 
 
 def make_classifiers():
-    svc_params = {
-        'C': scipy.stats.expon(scale=100),
+    svc_rbf_params = {
+        'C': scipy.stats.expon(scale=400),
         'gamma': scipy.stats.expon(scale=.1),
     }
+    svc_params = {
+        'C': scipy.stats.expon(scale=400)
+    }
     random_forest_params = {
-        'n_estimators': scipy.stats.randint(200, 700),
+        'n_estimators': scipy.stats.randint(500, 1500),
         'class_weight': ['balanced', 'balanced_subsample']
     }
     return [
         RandomizedSearchCV(
             SVC(cache_size=500, kernel='rbf', class_weight='balanced'),
-            svc_params,
+            svc_rbf_params,
             cv=2,
-            n_iter=10
+            n_iter=30
         ),
+        # RandomizedSearchCV(
+        #     LinearSVC(class_weight='balanced'),
+        #     svc_params,
+        #     cv=2,
+        #     n_iter=30
+        # ),
         RandomizedSearchCV(
             RandomForestClassifier(),
             random_forest_params,
             cv=2,
-            n_iter=10
+            n_iter=30
         )
     ]
 
@@ -155,7 +164,7 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
         label_ix
     )
     assert len(selection_transformer.scores_) == train_features.shape[1]
-    for feature_num in [3, 5, 7, 9, 11, 14]:
+    for feature_num in range(1, 20):
         selection_transformer.k = feature_num
         X_train = selection_transformer.transform(train_features)
         assert X_train.shape[1] == feature_num
@@ -239,7 +248,7 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
     best_model_selector = model_selector.best_estimator_
     print('Started model selection: {} on label: {}'.format(str(best_model_selector.__class__.__name__), label_ix))
     sorted_feature_importances = sorted(best_model_selector.feature_importances_, reverse=True)
-    for feature_num in [12, 16, 20]:
+    for feature_num in range(1, 20):
         selector = SelectFromModel(
             best_model_selector,
             prefit=True,
@@ -268,7 +277,7 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
 
 def iter_model_selection_methods(train_features, y_train, test_features, y_test, feature_names):
     params = {
-        'n_estimators': scipy.stats.randint(200, 700),
+        'n_estimators': scipy.stats.randint(500, 1500),
         'class_weight': ['balanced', 'balanced_subsample']
     }
     model_selectors = [
@@ -276,13 +285,13 @@ def iter_model_selection_methods(train_features, y_train, test_features, y_test,
             RandomForestClassifier(),
             params,
             cv=2,
-            n_iter=10
+            n_iter=30
         ),
         RandomizedSearchCV(
             ExtraTreesClassifier(),
             params,
             cv=2,
-            n_iter=10
+            n_iter=30
         ),
     ]
     yield from (
@@ -321,7 +330,7 @@ def main(clear_cache, n_jobs, test):
     methods = [
         iter_ranking_methods,
         iter_model_selection_methods,
-        iter_dimensionality_reduction_methods
+        # iter_dimensionality_reduction_methods
     ]
     jobs = [method(train_features, y_train, test_features, y_test, feature_names) for method in methods]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(itertools.chain(*jobs))
