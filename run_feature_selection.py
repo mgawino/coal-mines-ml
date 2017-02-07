@@ -122,12 +122,6 @@ def make_classifiers():
             cv=2,
             n_iter=30
         ),
-        # RandomizedSearchCV(
-        #     LinearSVC(class_weight='balanced'),
-        #     svc_params,
-        #     cv=2,
-        #     n_iter=30
-        # ),
         RandomizedSearchCV(
             RandomForestClassifier(),
             random_forest_params,
