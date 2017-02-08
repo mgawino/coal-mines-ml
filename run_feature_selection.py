@@ -15,6 +15,7 @@ from joblib import Parallel, delayed
 from sklearn.datasets import make_classification
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectFromModel, VarianceThreshold
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import Imputer, StandardScaler
@@ -27,6 +28,7 @@ from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classi
 from sklearn.metrics import roc_auc_score
 from sklearn.svm import SVC, LinearSVC
 import scipy
+from sklearn.tree import DecisionTreeClassifier
 from utils import timeit, RESULTS_PATH, MODEL_CACHE_PATH
 from wrappers import gini_index_wrapper
 
@@ -111,23 +113,11 @@ def make_classifiers():
     svc_params = {
         'C': scipy.stats.expon(scale=400)
     }
-    random_forest_params = {
-        'n_estimators': scipy.stats.randint(500, 1500),
-        'class_weight': ['balanced', 'balanced_subsample']
-    }
     return [
-        RandomizedSearchCV(
-            SVC(cache_size=500, kernel='rbf', class_weight='balanced'),
-            svc_rbf_params,
-            cv=2,
-            n_iter=30
-        ),
-        RandomizedSearchCV(
-            RandomForestClassifier(),
-            random_forest_params,
-            cv=2,
-            n_iter=30
-        )
+        SVC(cache_size=500, kernel='rbf', class_weight='balanced'),
+        LinearSVC(class_weight='balanced'),
+        DecisionTreeClassifier(class_weight='balanced'),
+        LogisticRegression(class_weight='balanced')
     ]
 
 
@@ -136,6 +126,8 @@ def fit_or_load_from_cache(model, X_train, y_train, label_ix):
         model_file_name = '{}_{}'.format(label_ix, model.score_func.__name__)
     elif isinstance(model, RandomizedSearchCV):
         model_file_name = '{}_{}'.format(label_ix, model.estimator.__class__.__name__)
+    else:
+        model_file_name = '{}_{}'.format(label_ix, model.__class__.__name__)
     model_file_path = os.path.join(MODEL_CACHE_PATH, model_file_name)
     if os.path.exists(model_file_path):
         print('Loaded model from cache: {}'.format(model_file_name))

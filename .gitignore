@@ -8,3 +8,5 @@ results/*
 !results/.gitkeep
 model_cache/*
 !model_cache/.gitkeep
+data_cache/*
+!data_cache/.gitkeep
