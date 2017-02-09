@@ -1,10 +1,21 @@
 # -*- coding: utf-8 -*-
 import os
 
+import numpy as np
+
 import click
 from sklearn.pipeline import FeatureUnion
 from transformer import SensorTransformer, SensorMultiTransformer
-from tsfresh.feature_extraction.feature_calculators import *
+from tsfresh.feature_extraction.feature_calculators import (
+    mean_change,
+    first_location_of_maximum,
+    last_location_of_maximum,
+    binned_entropy,
+    mean_abs_change,
+    absolute_sum_of_changes,
+    cwt_coefficients,
+    fft_coefficient
+)
 from reader import DataReader
 
 
@@ -27,90 +38,43 @@ class FeatureExtractor:
     FEATURE_NAMES_CACHE_PATH = os.path.expanduser('~/feature_names_cache.npy')
 
     def __init__(self, n_jobs):
+
+        def abs_energy(x):
+            return np.sum(x * x)
+
         feature_transformers = [
-            ('max', SensorTransformer(max)),
-            ('min', SensorTransformer(min)),
-            ('mean_autocorrelation', SensorTransformer(mean_autocorrelation)),
-            ('skewness', SensorTransformer(skewness)),
-            ('kurtosis', SensorTransformer(kurtosis)),
-            ('longest_strike_below_mean', SensorTransformer(longest_strike_below_mean)),
-            ('longest_strike_above_mean', SensorTransformer(longest_strike_above_mean)),
-            ('last_location_of_maximum', SensorTransformer(last_location_of_maximum)),
+            ('max', SensorTransformer(np.max)),
+            ('min', SensorTransformer(np.min)),
             ('first_location_of_maximum', SensorTransformer(first_location_of_maximum)),
-            ('last_location_of_minimum', SensorTransformer(last_location_of_minimum)),
-            ('first_location_of_minimum', SensorTransformer(first_location_of_minimum)),
-            ('binned_entropy_10', SensorTransformer(binned_entropy, max_bins=10)),
-            ('mean_second_derivate_central', SensorTransformer(mean_second_derivate_central)),
-            ('mean', SensorTransformer(mean)),
-            ('median', SensorTransformer(median)),
-            ('variance', SensorTransformer(variance)),
-            ('std', SensorTransformer(standard_deviation)),
-            ('var_larger_than_std', SensorTransformer(variance_larger_than_standard_deviation)),
-            ('sum_values', SensorTransformer(sum_values)),
+            ('last_location_of_maximum', SensorTransformer(last_location_of_maximum)),
+            ('binned_entropy_10', SensorTransformer(binned_entropy, max_bins=5)),
+            ('mean', SensorTransformer(np.mean)),
+            ('median', SensorTransformer(np.median)),
+            ('variance', SensorTransformer(np.var)),
+            ('std', SensorTransformer(np.std)),
+            ('sum_values', SensorTransformer(np.sum)),
             ('mean_change', SensorTransformer(mean_change)),
             ('mean_abs_change', SensorTransformer(mean_abs_change)),
             ('absolute_sum_of_changes', SensorTransformer(absolute_sum_of_changes)),
             ('abs_energy', SensorTransformer(abs_energy)),
         ]
-        for n in [1, 3, 5]:
-            feature_transformers.append(('number_peaks_{}'.format(n), SensorTransformer(number_peaks, n=n)))
-            feature_transformers.append(('large_num_of_peaks_{}'.format(n), SensorTransformer(large_number_of_peaks, n=n)))
-            # feature_transformers.append(('cwt_peaks_{}'.format(n), SensorTransformer(number_cwt_peaks, n=n)))
 
-        for lag in range(1, 4):
-            transformer = SensorTransformer(time_reversal_asymmetry_statistic, lag=lag)
-            feature_transformers.append(('time_reversal_{}'.format(lag), transformer))
+        percentiles = [10, 20, 80, 90]
+        for q in percentiles:
+            feature_transformers.append(('percentile_{}'.format(q), SensorTransformer(np.percentile, q=q)))
 
-        for i in range(20):
-            r = 0.05 * i
-            feature_transformers.append(('symmetry_looking_{}'.format(r), SensorTransformer(symmetry_looking, r=r)))
+        # feature_transformers.insert(
+        #     0,
+        #     ('cwt_coeff',
+        #      SensorMultiTransformer(
+        #          cwt_coefficients,
+        #          param=[{'coeff': coeff, 'widths': (2, 5, 10, 20), 'w': w} for coeff in range(15) for w in (2, 5, 10, 20)]
+        #      ))
+        # )
 
-        for i in range(10):
-            r = 0.05 * i
-            feature_transformers.append(('large_std_{}'.format(r), SensorTransformer(large_standard_deviation, r=r)))
-            feature_transformers.append(('autocorrelation_{}'.format(i), SensorTransformer(autocorrelation, lag=i)))
-
-        quantiles = [.1, .2, .3, .4, .6, .7, .8, .9]
-        for q in quantiles:
-            feature_transformers.append(('quantile_{}'.format(q), SensorTransformer(quantile, q=q)))
-
-        feature_transformers.append(
-            ('index_mass_quantile', SensorMultiTransformer(index_mass_quantile, param=[{'q': q} for q in quantiles]))
-        )
-
-        for ql, qh in itertools.product([0., .2, .4, .6, .8], [.2, .4, .6, .8, 1.]):
-            feature_transformers.append(
-                ('mean_abs_change_quantile_{}_{}'.format(ql, qh),
-                 SensorTransformer(mean_abs_change_quantiles, ql=ql, qh=qh))
-            )
-
-        # for r in [.1, .3, .5, .7, .9]:
-        #     feature_transformers.append(
-        #         ('approximate_entropy_{}'.format(r), SensorTransformer(approximate_entropy, m=2, r=r))
-        #     )
-
-        feature_transformers.insert(
-            0,
-            ('ar_coefficient',
-             SensorMultiTransformer(ar_coefficient, param=[{'coeff': coeff, 'k': 10} for coeff in range(5)]))
-        )
-
-        feature_transformers.insert(
-            0,
-            ('cwt_coeff',
-             SensorMultiTransformer(
-                 cwt_coefficients,
-                 param=[{'coeff': coeff, 'widths': (2, 5, 10, 20), 'w': w} for coeff in range(15) for w in (2, 5, 10, 20)]
-             ))
-        )
-
-        feature_transformers.append(
-            ('spkt_welch_density',
-             SensorMultiTransformer(spkt_welch_density, param=[{'coeff': coeff} for coeff in [2, 5, 8]]))
-        )
         feature_transformers.append(
             ('fft_coefficent',
-             SensorMultiTransformer(fft_coefficient, param=[{'coeff': coeff} for coeff in range(10)]))
+             SensorMultiTransformer(fft_coefficient, param=[{'coeff': coeff} for coeff in range(5)]))
         )
 
         self.transformer = CustomFeatureUnion(feature_transformers, n_jobs=n_jobs)
