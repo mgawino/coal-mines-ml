@@ -5,18 +5,6 @@ import csv
 import numpy as np
 
 
-def grouped(iterable, count):
-    """ Group @iterable into lists of length @count """
-    chunk = []
-    for item in iterable:
-        chunk.append(item)
-        if len(chunk) == count:
-            yield chunk
-            chunk = []
-    if len(chunk) > 0:
-        yield chunk
-
-
 class DataReader(object):
     SENSOR_DATA_COUNT_IN_ROW = 600
     SENSOR_NUM = 28
@@ -33,10 +21,10 @@ class DataReader(object):
             with open(filepath) as file:
                 print('Reading file: {} ...'.format(filepath))
                 reader = csv.reader(file)
-                for row in reader:
-                    sensors_data = list(grouped(row, cls.SENSOR_DATA_COUNT_IN_ROW))
-                    assert len(sensors_data) == cls.SENSOR_NUM
-                    file_data.append(np.asarray(sensors_data, dtype=np.float32))
+                for sensors_data in reader:
+                    assert len(sensors_data) == cls.SENSOR_NUM * cls.SENSOR_DATA_COUNT_IN_ROW
+                    file_data.append(sensors_data)
+                    break
             yield np.asarray(file_data, dtype=np.float32)
 
     @classmethod
@@ -55,6 +43,7 @@ class DataReader(object):
                 for sensor_labels in reader:
                     assert len(sensor_labels) == 3
                     yield np.asarray(sensor_labels)
+                    break
 
     @classmethod
     def read_test_labels(cls):

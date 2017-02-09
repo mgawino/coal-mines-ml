@@ -2,9 +2,41 @@
 import pandas as pd
 
 import numpy as np
-
+from reader import DataReader
 from sklearn.base import TransformerMixin
 from utils import measure_time
+
+
+class SensorGroupingTransformer(TransformerMixin):
+
+    def __init__(self, sensor_split):
+        assert 10 % sensor_split == 0
+        self.sensor_data_count = DataReader.SENSOR_DATA_COUNT_IN_ROW
+        self.sensor_split_len = self.sensor_data_count / sensor_split
+
+    def _grouped(self, iterable, count):
+        chunk = []
+        for item in iterable:
+            chunk.append(item)
+            if len(chunk) == count:
+                yield chunk
+                chunk = []
+        if len(chunk) > 0:
+            yield chunk
+
+    @measure_time
+    def transform(self, X):
+        assert len(X.shape) == 2
+        result = []
+        for sensors_data in X:
+            groups = []
+            for sensor_data in self._grouped(sensors_data, self.sensor_data_count):
+                sensor_data_splitted = list(self._grouped(sensor_data, self.sensor_split_len))
+                groups.append(sensor_data_splitted)
+            result.append(groups)
+        result = np.asarray(result)
+        print('Grouping transformer shape: {}'.format(result.shape))
+        return result
 
 
 class SensorTransformer(TransformerMixin):
@@ -13,29 +45,34 @@ class SensorTransformer(TransformerMixin):
         self.function = function
         self.function_kwargs = function_kwargs
         self.sensor_names = None
-
-    def set_sensor_names(self, sensor_names):
-        self.sensor_names = sensor_names
+        self.sensor_splits_count = None
 
     def get_feature_names(self):
+        assert self.sensor_names is not None
+        assert self.sensor_splits_count is not None
+        split_interval = 10 / self.sensor_splits_count
         fun_name = self.function.__name__
         fun_kwargs_sufix = '_'.join('{}_{}'.format(k, v) for k, v in self.function_kwargs.items())
-        feature_names = ['{}_{}'.format(sensor_name, fun_name)
-                         for sensor_name in self.sensor_names]
         if fun_kwargs_sufix:
-            feature_names = ['{}_{}'.format(name, fun_kwargs_sufix) for name in feature_names]
+            fun_name = '{}_{}'.format(fun_name, fun_kwargs_sufix)
+        feature_names = ['{}_{}m-{}m_{}'.format(sensor_name, m, m + split_interval, fun_name)
+                         for sensor_name in self.sensor_names
+                         for m in range(0, 10, split_interval)]
         return feature_names
 
-    @measure_time()
+    @measure_time
     def transform(self, X):
+        assert len(X.shape) == 4
+        assert X.shape[1] == DataReader.SENSOR_NUM
+        self.sensor_splits_count = X.shape[2]
         result = []
-        for row in X:
+        for sensors_data in X:
             features = []
-            for sensor_data in row:
-                features.append(self.function(sensor_data, **self.function_kwargs))
+            for sensor_data in sensors_data:
+                for sensor_group in sensor_data:
+                    features.append(self.function(sensor_group, **self.function_kwargs))
             result.append(np.asarray(features, dtype=np.float64))
         result = np.asarray(result, dtype=np.float64)
-        assert result.shape == (X.shape[0], len(self.sensor_names))
         return result
 
 
@@ -43,23 +80,28 @@ class SensorMultiTransformer(SensorTransformer):
 
     def get_feature_names(self):
         assert self.sensor_names is not None
+        assert self.sensor_splits_count is not None
         feature_names = []
+        split_interval = 10 / self.sensor_splits_count
         for sensor_name in self.sensor_names:
-            res = self.function([0], c=sensor_name, **self.function_kwargs)
-            feature_names.extend(list(res.index))
+            for m in range(0, 10, split_interval):
+                name = '{}_{}m-{}m'.format(sensor_name, m, m + split_interval)
+                res = self.function([0], c=name, **self.function_kwargs)
+                feature_names.extend(list(res.index))
         return feature_names
 
-    @measure_time()
+    @measure_time
     def transform(self, X):
-        assert self.sensor_names is not None
+        assert len(X.shape) == 4
+        assert X.shape[1] == DataReader.SENSOR_NUM
+        self.sensor_splits_count = X.shape[2]
         result = []
-        for row in X:
+        for sensors_data in X:
             features = pd.Series()
-            for sensor_name, sensor_data in zip(self.sensor_names, row):
-                res = self.function(sensor_data, c=sensor_name, **self.function_kwargs)
-                features = features.append(res)
+            for sensor_name, sensor_data in zip(self.sensor_names, sensors_data):
+                for sensor_group in sensor_data:
+                    res = self.function(sensor_group, c=sensor_name, **self.function_kwargs)
+                    features = features.append(res)
             result.append(features.values)
         result = np.asarray(result, dtype=np.float64)
-        features_num = len(self.sensor_names) * len(self.function_kwargs['param'])
-        assert result.shape == (X.shape[0], features_num)
         return result

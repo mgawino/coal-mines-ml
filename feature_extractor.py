@@ -4,8 +4,8 @@ import os
 import numpy as np
 
 import click
-from sklearn.pipeline import FeatureUnion
-from transformer import SensorTransformer, SensorMultiTransformer
+from sklearn.pipeline import FeatureUnion, Pipeline
+from transformer import SensorTransformer, SensorMultiTransformer, SensorGroupingTransformer
 from tsfresh.feature_extraction.feature_calculators import (
     mean_change,
     first_location_of_maximum,
@@ -32,22 +32,28 @@ class CustomFeatureUnion(FeatureUnion):
         return feature_names
 
 
+class CustomPipeline(Pipeline):
+
+    def get_feature_names(self):
+        return self.steps[-1][1].get_feature_names()
+
+
+def abs_energy(x):
+    return np.sum(x * x)
+
+
 class FeatureExtractor:
     TRAIN_FEATURES_CACHE_PATH = os.path.expanduser('~/train_features_cache.npy')
     TEST_FEATURES_CACHE_PATH = os.path.expanduser('~/test_features_cache.npy')
     FEATURE_NAMES_CACHE_PATH = os.path.expanduser('~/feature_names_cache.npy')
 
     def __init__(self, n_jobs):
-
-        def abs_energy(x):
-            return np.sum(x * x)
-
         feature_transformers = [
             ('max', SensorTransformer(np.max)),
             ('min', SensorTransformer(np.min)),
             ('first_location_of_maximum', SensorTransformer(first_location_of_maximum)),
             ('last_location_of_maximum', SensorTransformer(last_location_of_maximum)),
-            ('binned_entropy_10', SensorTransformer(binned_entropy, max_bins=5)),
+            ('binned_entropy_5', SensorTransformer(binned_entropy, max_bins=5)),
             ('mean', SensorTransformer(np.mean)),
             ('median', SensorTransformer(np.median)),
             ('variance', SensorTransformer(np.var)),
@@ -57,30 +63,35 @@ class FeatureExtractor:
             ('mean_abs_change', SensorTransformer(mean_abs_change)),
             ('absolute_sum_of_changes', SensorTransformer(absolute_sum_of_changes)),
             ('abs_energy', SensorTransformer(abs_energy)),
+            ('percentile_10', SensorTransformer(np.percentile, q=10)),
+            ('percentile_20', SensorTransformer(np.percentile, q=20)),
+            ('percentile_80', SensorTransformer(np.percentile, q=80)),
+            ('percentile_90', SensorTransformer(np.percentile, q=90)),
+            ('fft_coefficent', SensorMultiTransformer(
+                fft_coefficient,
+                param=[{'coeff': coeff} for coeff in range(5)]
+            )),
+            # ('cwt_coeff', SensorMultiTransformer(
+            #      cwt_coefficients,
+            #      param=[{'coeff': coeff, 'widths': (2, 5, 10, 20), 'w': w}
+            #             for coeff in range(15) for w in (2, 5, 10, 20)]
+            #  ))
         ]
 
-        percentiles = [10, 20, 80, 90]
-        for q in percentiles:
-            feature_transformers.append(('percentile_{}'.format(q), SensorTransformer(np.percentile, q=q)))
-
-        # feature_transformers.insert(
-        #     0,
-        #     ('cwt_coeff',
-        #      SensorMultiTransformer(
-        #          cwt_coefficients,
-        #          param=[{'coeff': coeff, 'widths': (2, 5, 10, 20), 'w': w} for coeff in range(15) for w in (2, 5, 10, 20)]
-        #      ))
-        # )
-
-        feature_transformers.append(
-            ('fft_coefficent',
-             SensorMultiTransformer(fft_coefficient, param=[{'coeff': coeff} for coeff in range(5)]))
-        )
-
-        self.transformer = CustomFeatureUnion(feature_transformers, n_jobs=n_jobs)
         sensor_names = DataReader.get_sensor_names()
-        for _, trans in self.transformer.transformer_list:
-            trans.set_sensor_names(sensor_names)
+        for _, trans in feature_transformers:
+            trans.sensor_names = sensor_names
+
+        self.transformer = CustomFeatureUnion([
+            ('first', CustomPipeline([
+                ('10m', SensorGroupingTransformer(sensor_split=1)),
+                ('features', CustomFeatureUnion(feature_transformers, n_jobs=n_jobs)),
+            ])),
+            ('second', CustomPipeline([
+                ('1m', SensorGroupingTransformer(sensor_split=10)),
+                ('fetures', CustomFeatureUnion(feature_transformers, n_jobs=n_jobs))
+            ]))
+        ])
 
     @classmethod
     def clear_cache(cls):
@@ -115,12 +126,12 @@ class FeatureExtractor:
             X_train_partials.append(X_train_partial)
         X_train = np.concatenate(X_train_partials, axis=0)
         rows = sum(partial.shape[0] for partial in X_train_partials)
-        assert X_train.shape == (rows, DataReader.SENSOR_NUM, DataReader.SENSOR_DATA_COUNT_IN_ROW)
+        assert X_train.shape == (rows, DataReader.SENSOR_NUM * DataReader.SENSOR_DATA_COUNT_IN_ROW)
         train_features = self.transformer.transform(X_train)
         feature_names = np.asarray(self.transformer.get_feature_names())
         assert train_features.shape == (rows, len(feature_names))
         X_test = DataReader.read_test_data()
-        assert X_test.shape == (X_test.shape[0], DataReader.SENSOR_NUM, DataReader.SENSOR_DATA_COUNT_IN_ROW)
+        assert X_test.shape == (X_test.shape[0], DataReader.SENSOR_NUM * DataReader.SENSOR_DATA_COUNT_IN_ROW)
         test_features = self.transformer.transform(X_test)
         assert test_features.shape == (test_features.shape[0], len(feature_names))
         return train_features, test_features, feature_names
