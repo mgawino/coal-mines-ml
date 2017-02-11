@@ -231,12 +231,11 @@ def iter_dimensionality_reduction_methods(train_features, y_train, test_features
 
 def validate_model_selectors(model_selector, train_features, y_train, test_features, y_test, feature_names, label_ix):
     model_selector, selection_duration = fit_or_load_from_cache(model_selector, train_features, y_train, label_ix)
-    best_model_selector = model_selector.best_estimator_
-    print('Started model selection: {} on label: {}'.format(str(best_model_selector.__class__.__name__), label_ix))
-    sorted_feature_importances = sorted(best_model_selector.feature_importances_, reverse=True)
+    print('Started model selection: {} on label: {}'.format(str(model_selector.__class__.__name__), label_ix))
+    sorted_feature_importances = sorted(model_selector.feature_importances_, reverse=True)
     for feature_num in range(1, 20):
         selector = SelectFromModel(
-            best_model_selector,
+            model_selector,
             prefit=True,
             threshold=sorted_feature_importances[feature_num]
         )
@@ -251,34 +250,20 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
                 classifier=classifier,
                 y_true=y_test,
                 predictions=predictions,
-                score_fun=best_model_selector.__class__.__name__,
+                score_fun=model_selector.__class__.__name__,
                 feature_num=len(selected_features),
                 label_ix=label_ix,
                 select_time=selection_duration,
                 clasiff_time=classification_duration,
                 selected_features=selected_features
             )
-    print('Finished model selection: {} on label: {}'.format(str(best_model_selector), label_ix))
+    print('Finished model selection: {} on label: {}'.format(str(model_selector), label_ix))
 
 
 def iter_model_selection_methods(train_features, y_train, test_features, y_test, feature_names):
-    params = {
-        'n_estimators': scipy.stats.randint(500, 1500),
-        'class_weight': ['balanced', 'balanced_subsample']
-    }
     model_selectors = [
-        RandomizedSearchCV(
-            RandomForestClassifier(),
-            params,
-            cv=2,
-            n_iter=30
-        ),
-        RandomizedSearchCV(
-            ExtraTreesClassifier(),
-            params,
-            cv=2,
-            n_iter=30
-        ),
+        RandomForestClassifier(n_estimators=700, class_weight='balanced'),
+        ExtraTreesClassifier(n_estimators=700, class_weight='balanced')
     ]
     yield from (
         delayed(validate_model_selectors)(model_selector, train_features, y_train[:, label_ix],
@@ -291,9 +276,8 @@ def iter_model_selection_methods(train_features, y_train, test_features, y_test,
 def pre_filter(train_features, test_features, feature_names):
     print('Pre filtering data...')
     pipeline = Pipeline([
-        ('imputer', Imputer(strategy='mean')),
+        # ('imputer', Imputer(strategy='mean')),
         ('variance_threshold', VarianceThreshold(threshold=0.)),
-        ('scaler', StandardScaler())
     ])
     train_features = pipeline.fit_transform(train_features)
     test_features = pipeline.transform(test_features)
