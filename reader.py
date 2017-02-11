@@ -24,7 +24,6 @@ class DataReader(object):
                 for sensors_data in reader:
                     assert len(sensors_data) == cls.SENSOR_NUM * cls.SENSOR_DATA_COUNT_IN_ROW
                     file_data.append(sensors_data)
-                    break
             yield np.asarray(file_data, dtype=np.float32)
 
     @classmethod
@@ -43,7 +42,6 @@ class DataReader(object):
                 for sensor_labels in reader:
                     assert len(sensor_labels) == 3
                     yield np.asarray(sensor_labels)
-                    break
 
     @classmethod
     def read_test_labels(cls):

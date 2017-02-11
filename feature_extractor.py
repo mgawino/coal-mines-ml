@@ -19,7 +19,7 @@ from tsfresh.feature_extraction.feature_calculators import (
 from reader import DataReader
 
 
-class CustomFeatureUnion(FeatureUnion):
+class SensorFeatureUnion(FeatureUnion):
 
     def get_feature_names(self):
         feature_names = []
@@ -32,7 +32,7 @@ class CustomFeatureUnion(FeatureUnion):
         return feature_names
 
 
-class CustomPipeline(Pipeline):
+class SensorPipeline(Pipeline):
 
     def get_feature_names(self):
         return self.steps[-1][1].get_feature_names()
@@ -47,7 +47,8 @@ class FeatureExtractor:
     TEST_FEATURES_CACHE_PATH = os.path.expanduser('~/test_features_cache.npy')
     FEATURE_NAMES_CACHE_PATH = os.path.expanduser('~/feature_names_cache.npy')
 
-    def __init__(self, n_jobs):
+    @staticmethod
+    def make_feature_transformer_pipeline(sensor_split_interval, n_jobs):
         feature_transformers = [
             ('max', SensorTransformer(np.max)),
             ('min', SensorTransformer(np.min)),
@@ -77,20 +78,23 @@ class FeatureExtractor:
             #             for coeff in range(15) for w in (2, 5, 10, 20)]
             #  ))
         ]
-
         sensor_names = DataReader.get_sensor_names()
-        for _, trans in feature_transformers:
-            trans.sensor_names = sensor_names
+        for _, feature_transformer in feature_transformers:
+            feature_transformer.sensor_names = sensor_names
+            feature_transformer.sensor_split_interval = sensor_split_interval
+        sensor_group_count = DataReader.SENSOR_DATA_COUNT_IN_ROW / sensor_split_interval
+        return SensorPipeline([
+            ('groups', SensorGroupingTransformer(
+                sensor_data_count=DataReader.SENSOR_DATA_COUNT_IN_ROW,
+                sensor_group_count=sensor_group_count
+            )),
+            ('features', SensorFeatureUnion(feature_transformers, n_jobs=n_jobs)),
+        ])
 
-        self.transformer = CustomFeatureUnion([
-            ('first', CustomPipeline([
-                ('10m', SensorGroupingTransformer(sensor_split=1)),
-                ('features', CustomFeatureUnion(feature_transformers, n_jobs=n_jobs)),
-            ])),
-            ('second', CustomPipeline([
-                ('1m', SensorGroupingTransformer(sensor_split=10)),
-                ('fetures', CustomFeatureUnion(feature_transformers, n_jobs=n_jobs))
-            ]))
+    def __init__(self, n_jobs):
+        self.transformer = SensorFeatureUnion([
+            ('first', self.make_feature_transformer_pipeline(sensor_split_interval=10, n_jobs=n_jobs)),
+            ('second', self.make_feature_transformer_pipeline(sensor_split_interval=1, n_jobs=n_jobs))
         ])
 
     @classmethod
