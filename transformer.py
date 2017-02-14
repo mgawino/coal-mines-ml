@@ -31,7 +31,7 @@ class SensorGroupingTransformer(TransformerMixin):
         for sensors_data in X:
             groups = []
             for sensor_data in self._grouped(sensors_data, self.sensor_data_count):
-                sensor_data_groups = np.asarray(self._grouped(sensor_data, self.sensor_group_count))
+                sensor_data_groups = np.asarray(list(self._grouped(sensor_data, self.sensor_group_count)))
                 groups.append(sensor_data_groups)
             result.append(np.asarray(groups, dtype=np.float32))
         result = np.asarray(result, dtype=np.float32)
