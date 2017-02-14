@@ -23,7 +23,7 @@ class DataReader(object):
                 reader = csv.reader(file)
                 for sensors_data in reader:
                     assert len(sensors_data) == cls.SENSOR_NUM * cls.SENSOR_DATA_COUNT_IN_ROW
-                    file_data.append(sensors_data)
+                    file_data.append(np.asarray(sensors_data, dtype=np.float32))
             yield np.asarray(file_data, dtype=np.float32)
 
     @classmethod

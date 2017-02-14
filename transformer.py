@@ -31,10 +31,10 @@ class SensorGroupingTransformer(TransformerMixin):
         for sensors_data in X:
             groups = []
             for sensor_data in self._grouped(sensors_data, self.sensor_data_count):
-                sensor_data_groups = list(self._grouped(sensor_data, self.sensor_group_count))
+                sensor_data_groups = np.asarray(self._grouped(sensor_data, self.sensor_group_count))
                 groups.append(sensor_data_groups)
-            result.append(groups)
-        result = np.asarray(result)
+            result.append(np.asarray(groups, dtype=np.float32))
+        result = np.asarray(result, dtype=np.float32)
         print('Grouping transformer shape: {}'.format(result.shape))
         return result
 
@@ -69,8 +69,8 @@ class SensorTransformer(TransformerMixin):
             for sensor_data in sensors_data:
                 for sensor_group in sensor_data:
                     features.append(self.function(sensor_group, **self.function_kwargs))
-            result.append(np.asarray(features, dtype=np.float64))
-        result = np.asarray(result, dtype=np.float64)
+            result.append(np.asarray(features, dtype=np.float32))
+        result = np.asarray(result, dtype=np.float32)
         return result
 
 
@@ -99,5 +99,5 @@ class SensorMultiTransformer(SensorTransformer):
                     res = self.function(sensor_group, c=sensor_name, **self.function_kwargs)
                     features = features.append(res)
             result.append(features.values)
-        result = np.asarray(result, dtype=np.float64)
+        result = np.asarray(result, dtype=np.float32)
         return result
