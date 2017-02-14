@@ -68,10 +68,10 @@ class FeatureExtractor:
             ('percentile_20', SensorTransformer(np.percentile, q=20)),
             ('percentile_80', SensorTransformer(np.percentile, q=80)),
             ('percentile_90', SensorTransformer(np.percentile, q=90)),
-            ('fft_coefficent', SensorMultiTransformer(
-                fft_coefficient,
-                param=[{'coeff': coeff} for coeff in range(5)]
-            )),
+            # ('fft_coefficent', SensorMultiTransformer(
+            #     fft_coefficient,
+            #     param=[{'coeff': coeff} for coeff in range(5)]
+            # )),
             # ('cwt_coeff', SensorMultiTransformer(
             #      cwt_coefficients,
             #      param=[{'coeff': coeff, 'widths': (2, 5, 10, 20), 'w': w}
