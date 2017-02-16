@@ -48,7 +48,8 @@ class FeatureExtractor:
     FEATURE_NAMES_CACHE_PATH = os.path.expanduser('~/feature_names_cache.npy')
 
     @staticmethod
-    def make_feature_transformer_pipeline(sensor_split_interval, n_jobs):
+    def make_feature_transformer_pipeline(sensor_group_count, n_jobs):
+        assert sensor_group_count % 60 == 0
         feature_transformers = [
             ('max', SensorTransformer(np.max)),
             ('min', SensorTransformer(np.min)),
@@ -81,8 +82,7 @@ class FeatureExtractor:
         sensor_names = DataReader.get_sensor_names()
         for _, feature_transformer in feature_transformers:
             feature_transformer.sensor_names = sensor_names
-            feature_transformer.sensor_split_interval = sensor_split_interval
-        sensor_group_count = DataReader.SENSOR_DATA_COUNT_IN_ROW / sensor_split_interval
+            feature_transformer.sensor_group_minutes_interval = sensor_group_count // 60
         return SensorPipeline([
             ('groups', SensorGroupingTransformer(
                 sensor_data_count=DataReader.SENSOR_DATA_COUNT_IN_ROW,
@@ -93,8 +93,8 @@ class FeatureExtractor:
 
     def __init__(self, n_jobs):
         self.transformer = SensorFeatureUnion([
-            ('first', self.make_feature_transformer_pipeline(sensor_split_interval=10, n_jobs=n_jobs)),
-            ('second', self.make_feature_transformer_pipeline(sensor_split_interval=1, n_jobs=n_jobs))
+            ('first', self.make_feature_transformer_pipeline(sensor_group_count=60, n_jobs=n_jobs)),
+            ('second', self.make_feature_transformer_pipeline(sensor_group_count=600, n_jobs=n_jobs))
         ])
 
     @classmethod

@@ -45,18 +45,18 @@ class SensorTransformer(TransformerMixin):
         self.function = function
         self.function_kwargs = function_kwargs
         self.sensor_names = None
-        self.sensor_split_interval = None
+        self.sensor_group_minutes_interval = None
 
     def get_feature_names(self):
         assert self.sensor_names is not None
-        assert self.sensor_split_interval is not None
+        assert self.sensor_group_minutes_interval is not None
         fun_name = self.function.__name__
         fun_kwargs_sufix = '_'.join('{}_{}'.format(k, v) for k, v in self.function_kwargs.items())
         if fun_kwargs_sufix:
             fun_name = '{}_{}'.format(fun_name, fun_kwargs_sufix)
-        feature_names = ['{}_{}m-{}m_{}'.format(sensor_name, m, m + self.sensor_split_interval, fun_name)
+        feature_names = ['{}_{}m-{}m_{}'.format(sensor_name, m, m + self.sensor_group_minutes_interval, fun_name)
                          for sensor_name in self.sensor_names
-                         for m in range(0, 10, self.sensor_split_interval)]
+                         for m in range(0, 10, self.sensor_group_minutes_interval)]
         return feature_names
 
     @measure_time
@@ -78,11 +78,11 @@ class SensorMultiTransformer(SensorTransformer):
 
     def get_feature_names(self):
         assert self.sensor_names is not None
-        assert self.sensor_split_interval is not None
+        assert self.sensor_group_minutes_interval is not None
         feature_names = []
         for sensor_name in self.sensor_names:
-            for m in range(0, 10, self.sensor_split_interval):
-                name = '{}_{}m-{}m'.format(sensor_name, m, m + self.sensor_split_interval)
+            for m in range(0, 10, self.sensor_group_minutes_interval):
+                name = '{}_{}m-{}m'.format(sensor_name, m, m + self.sensor_group_minutes_interval)
                 res = self.function([0], c=name, **self.function_kwargs)
                 feature_names.extend(list(res.index))
         return feature_names
