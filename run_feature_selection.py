@@ -30,7 +30,7 @@ from sklearn.svm import SVC, LinearSVC
 import scipy
 from sklearn.tree import DecisionTreeClassifier
 from utils import timeit, RESULTS_PATH, MODEL_CACHE_PATH
-from wrappers import gini_index_wrapper
+from wrappers import gini_index_wrapper, corr_wrapper
 
 
 def class_to_binary(x):
@@ -178,8 +178,9 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
 def iter_ranking_methods(train_features, y_train, test_features, y_test, feature_names):
     ranking_selectors = [
         SelectKBest(gini_index_wrapper),
+        SelectKBest(corr_wrapper),
         SelectKBest(f_classif),
-        SelectKBest(mutual_info_classif),
+        SelectKBest(mutual_info_classif)
     ]
     yield from (
         delayed(validate_ranking_selection)(selection_transformer, train_features, y_train[:, label_ix], test_features,

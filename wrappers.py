@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+from scipy.stats import pearsonr
 from skfeature.function.information_theoretical_based.MRMR import mrmr
 from skfeature.function.statistical_based.gini_index import gini_index
 
@@ -17,3 +18,13 @@ def mrmr_wrapper(X, y):
 def gini_index_wrapper(X, y):
     scores = gini_index(X, y)
     return np.negative(scores)
+
+
+def corr_wrapper(X, y):
+    scores = []
+    pvalues = []
+    for column in X.T:
+        corr, pvalue = pearsonr(column, y)
+        scores.append(abs(corr))
+        pvalues.append(pvalue)
+    return np.asarray(scores), np.asarray(pvalues)
