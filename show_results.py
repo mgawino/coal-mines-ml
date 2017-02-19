@@ -15,12 +15,13 @@ STATS_HEADER = ['AUC', 'model', 'f_num', 'score_fun', 'label']
 TIMES_HEADER = ['c_time', 's_time']
 FEATURES_HEADER = ['selected_features']
 PARAMS_HEADER = ['best_params']
+ALL_LABELS = 'ALL'
 LABEL_TO_METHANOMETER = {
     0: 'MM263',
     1: 'MM264',
-    2: 'MM256'
+    2: 'MM256',
+    3: ALL_LABELS
 }
-ALL_LABELS = 3
 
 
 def iter_results():
@@ -107,7 +108,7 @@ def show_summary():
 @click.option(
     '--filter-label', '-fl',
     default=ALL_LABELS,
-    type=click.Choice([ALL_LABELS] + list(LABEL_TO_METHANOMETER.values()))
+    type=click.Choice(list(LABEL_TO_METHANOMETER.values()))
 )
 def main(describe_data, **kwargs):
     if describe_data:

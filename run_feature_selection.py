@@ -18,7 +18,6 @@ from sklearn.feature_selection import SelectFromModel, VarianceThreshold
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.random_projection import GaussianRandomProjection
 
 from reader import DataReader
@@ -277,8 +276,7 @@ def iter_model_selection_methods(train_features, y_train, test_features, y_test,
 def pre_filter(train_features, test_features, feature_names):
     print('Pre filtering data...')
     pipeline = Pipeline([
-        # ('imputer', Imputer(strategy='mean')),
-        ('variance_threshold', VarianceThreshold(threshold=0.)),
+        ('variance_threshold', VarianceThreshold(threshold=0.))
     ])
     train_features = pipeline.fit_transform(train_features)
     test_features = pipeline.transform(test_features)
