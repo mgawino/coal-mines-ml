@@ -1,18 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 from scipy.stats import pearsonr
-from skfeature.function.information_theoretical_based.MRMR import mrmr
 from skfeature.function.statistical_based.gini_index import gini_index
-
-MAX_FEATURES = 20
-
-
-def mrmr_wrapper(X, y):
-    indexes = mrmr(X, y, n_selected_features=MAX_FEATURES)
-    scores = np.zeros(X.shape[1])
-    for ix, feature_ix in enumerate(reversed(indexes)):
-        scores[feature_ix] = ix
-    return scores
 
 
 def gini_index_wrapper(X, y):
@@ -28,3 +17,36 @@ def corr_wrapper(X, y):
         scores.append(abs(corr))
         pvalues.append(pvalue)
     return np.asarray(scores), np.asarray(pvalues)
+
+
+def mrmr(X, y, scores, max_features):
+    score_cache = dict()
+
+    def _score(first_ix, second_ix):
+        cache_key = tuple(sorted((first_ix, second_ix)))
+        if cache_key in score_cache:
+            return score_cache[cache_key]
+        first_column = X[:, cache_key[0]]
+        second_column = X[:, cache_key[1]]
+        score, _ = pearsonr(first_column, second_column)
+        score_cache[cache_key] = score
+        return score
+
+    def _redundancy(feature_ix):
+        return sum(_score(feature_ix, selected_ix) for selected_ix in selected_feature_indices)
+
+    top_feature_indices = set(np.argsort(scores)[-500:])
+    selected_feature_indices = set()
+
+    while len(selected_feature_indices) != max_features:
+        max_diff = -1000
+        max_ix = -1
+        for feature_ix in top_feature_indices:
+            diff = scores[feature_ix] - _redundancy(feature_ix)
+            if diff > max_diff:
+                max_diff = diff
+                max_ix = feature_ix
+        top_feature_indices.remove(max_ix)
+        selected_feature_indices.add(max_ix)
+
+    return list(selected_feature_indices)

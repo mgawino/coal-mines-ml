@@ -8,6 +8,8 @@ from uuid import uuid4
 
 import itertools
 
+import time
+
 import numpy as np
 
 import click
@@ -29,7 +31,7 @@ from sklearn.svm import SVC, LinearSVC
 import scipy
 from sklearn.tree import DecisionTreeClassifier
 from utils import timeit, RESULTS_PATH, MODEL_CACHE_PATH
-from wrappers import gini_index_wrapper, corr_wrapper
+from wrappers import gini_index_wrapper, corr_wrapper, mrmr
 
 
 def class_to_binary(x):
@@ -120,19 +122,44 @@ def make_classifiers():
     ]
 
 
-def fit_or_load_from_cache(model, X_train, y_train, label_ix):
+def make_ranking_selectors():
+    return [
+        SelectKBest(gini_index_wrapper),
+        SelectKBest(corr_wrapper),
+        SelectKBest(f_classif),
+        SelectKBest(mutual_info_classif)
+    ]
+
+
+def make_model_selectors():
+    return [
+        RandomForestClassifier(n_estimators=700, class_weight='balanced'),
+        ExtraTreesClassifier(n_estimators=700, class_weight='balanced')
+    ]
+
+
+def _model_to_cache_path(model, label_ix):
     if isinstance(model, SelectKBest):
         model_file_name = '{}_{}'.format(label_ix, model.score_func.__name__)
     elif isinstance(model, RandomizedSearchCV):
         model_file_name = '{}_{}'.format(label_ix, model.estimator.__class__.__name__)
     else:
         model_file_name = '{}_{}'.format(label_ix, model.__class__.__name__)
-    model_file_path = os.path.join(MODEL_CACHE_PATH, model_file_name)
-    if os.path.exists(model_file_path):
-        print('Loaded model from cache: {}'.format(model_file_name))
-        with open(model_file_path, 'rb') as model_file:
-            model, duration = pickle.load(model_file)
+    return os.path.join(MODEL_CACHE_PATH, model_file_name)
+
+
+def load_from_cache(model_file_path):
+    assert os.path.exists(model_file_path)
+    print('Loaded model from cache: {}'.format(os.path.basename(model_file_path)))
+    with open(model_file_path, 'rb') as model_file:
+        model, duration = pickle.load(model_file)
         return model, duration
+
+
+def fit_or_load_from_cache(model, X_train, y_train, label_ix):
+    model_file_path = _model_to_cache_path(model, label_ix)
+    if os.path.exists(model_file_path):
+        model, duration = load_from_cache(model_file_path)
     duration = timeit(model.fit, X_train, y_train)
     with open(model_file_path, 'wb') as model_file:
         pickle.dump((model, duration), model_file)
@@ -175,12 +202,7 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
 
 
 def iter_ranking_methods(train_features, y_train, test_features, y_test, feature_names):
-    ranking_selectors = [
-        SelectKBest(gini_index_wrapper),
-        SelectKBest(corr_wrapper),
-        SelectKBest(f_classif),
-        SelectKBest(mutual_info_classif)
-    ]
+    ranking_selectors = make_ranking_selectors()
     yield from (
         delayed(validate_ranking_selection)(selection_transformer, train_features, y_train[:, label_ix], test_features,
                                             y_test[:, label_ix], feature_names, label_ix)
@@ -261,14 +283,51 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
 
 
 def iter_model_selection_methods(train_features, y_train, test_features, y_test, feature_names):
-    model_selectors = [
-        RandomForestClassifier(n_estimators=700, class_weight='balanced'),
-        ExtraTreesClassifier(n_estimators=700, class_weight='balanced')
-    ]
+    model_selectors = make_model_selectors()
     yield from (
         delayed(validate_model_selectors)(model_selector, train_features, y_train[:, label_ix],
                                           test_features, y_test[:, label_ix], feature_names, label_ix)
         for model_selector in model_selectors
+        for label_ix in range(y_train.shape[1])
+    )
+
+
+def validate_mrmr_selector(selection_transformer, train_features, y_train, test_features, y_test,
+                           feature_names, label_ix):
+    print('Started MRMR on label: {} model: {}'.format(label_ix, selection_transformer))
+    assert len(selection_transformer.scores_) == train_features.shape[1]
+    start = time.process_time()
+    selected_feature_indices = mrmr(train_features, y_train, selection_transformer.scores_, max_features=10)
+    selection_duration = time.process_time() - start
+    X_train = train_features[:, selected_feature_indices]
+    assert X_train.shape[1] == 10
+    X_test = test_features[:, selected_feature_indices]
+    assert X_train.shape[1] == 10
+    selected_features = feature_names[selected_feature_indices]
+    for classifier in make_classifiers():
+        classification_duration = timeit(classifier.fit, X_train, y_train)
+        predictions = classifier.predict(X_test)
+        save_results(
+            prefix='ranking',
+            classifier=classifier,
+            y_true=y_test,
+            predictions=predictions,
+            score_fun='MRMR_{}'.format(selection_transformer.score_func.__name__),
+            feature_num=10,
+            label_ix=label_ix,
+            select_time=selection_duration,
+            clasiff_time=classification_duration,
+            selected_features=selected_features
+        )
+
+
+def iter_mrmr_methods(train_features, y_train, test_features, y_test, feature_names):
+    selectors = make_ranking_selectors()
+    yield from (
+        delayed(validate_mrmr_selector)(load_from_cache(_model_to_cache_path(selector, label_ix))[0],
+                                        train_features, y_train[:, label_ix], test_features,
+                                        y_test[:, label_ix], feature_names, label_ix)
+        for selector in selectors
         for label_ix in range(y_train.shape[1])
     )
 
@@ -300,6 +359,7 @@ def main(clear_cache, n_jobs, test):
         iter_ranking_methods,
         iter_model_selection_methods,
         # iter_dimensionality_reduction_methods
+        iter_mrmr_methods
     ]
     jobs = [method(train_features, y_train, test_features, y_test, feature_names) for method in methods]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(itertools.chain(*jobs))
