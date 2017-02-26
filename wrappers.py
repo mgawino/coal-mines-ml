@@ -43,11 +43,11 @@ def mrmr(X, y, scores, max_features):
         max_ix = -1
         for feature_ix in top_feature_indices:
             diff = scores[feature_ix] - _redundancy(feature_ix)
-            if diff < 0:
-                break
             if diff > max_diff:
                 max_diff = diff
                 max_ix = feature_ix
+        if max_diff < 0:
+            break
         top_feature_indices.remove(max_ix)
         selected_feature_indices.add(max_ix)
 
