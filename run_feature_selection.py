@@ -297,12 +297,16 @@ def validate_mrmr_selector(selection_transformer, train_features, y_train, test_
     print('Started MRMR on label: {} model: {}'.format(label_ix, selection_transformer))
     assert len(selection_transformer.scores_) == train_features.shape[1]
     start = time.process_time()
-    selected_feature_indices = mrmr(train_features, y_train, selection_transformer.scores_, max_features=10)
+    selected_feature_indices = mrmr(
+        train_features,
+        y_train,
+        selection_transformer.scores_,
+        max_features=20
+    )
     selection_duration = time.process_time() - start
     X_train = train_features[:, selected_feature_indices]
-    assert X_train.shape[1] == 10
     X_test = test_features[:, selected_feature_indices]
-    assert X_train.shape[1] == 10
+    assert X_train.shape[1] == X_test.shape[1]
     selected_features = feature_names[selected_feature_indices]
     for classifier in make_classifiers():
         classification_duration = timeit(classifier.fit, X_train, y_train)
@@ -313,7 +317,7 @@ def validate_mrmr_selector(selection_transformer, train_features, y_train, test_
             y_true=y_test,
             predictions=predictions,
             score_fun='MRMR_{}'.format(selection_transformer.score_func.__name__),
-            feature_num=10,
+            feature_num=len(selected_feature_indices),
             label_ix=label_ix,
             select_time=selection_duration,
             clasiff_time=classification_duration,
@@ -356,8 +360,8 @@ def main(clear_cache, n_jobs, test):
     print_labels_summary(y_train, y_test)
     train_features, test_features, feature_names = pre_filter(train_features, test_features, feature_names)
     methods = [
-        iter_ranking_methods,
-        iter_model_selection_methods,
+        # iter_ranking_methods,
+        # iter_model_selection_methods,
         # iter_dimensionality_reduction_methods
         iter_mrmr_methods
     ]
