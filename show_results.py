@@ -53,7 +53,7 @@ def _wrap_selected_features(data, header, feature_limit):
         selected_features = result[selected_features_ix]
         if selected_features is not None:
             selected_features = '\n'.join(selected_features[:feature_limit])
-            result[selected_features_ix] = selected_featuresg
+            result[selected_features_ix] = selected_features
 
 
 def modify_data(data, header, include_features, feature_count, filter_label):
