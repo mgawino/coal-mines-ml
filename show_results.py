@@ -52,8 +52,8 @@ def _wrap_selected_features(data, header, feature_limit):
     for result in data:
         selected_features = result[selected_features_ix]
         if selected_features is not None:
-            selected_features = ','.join(selected_features[:feature_limit])
-            result[selected_features_ix] = textwrap.fill(selected_features, width=50)
+            selected_features = '\n'.join(selected_features[:feature_limit])
+            result[selected_features_ix] = selected_featuresg
 
 
 def modify_data(data, header, include_features, feature_count, filter_label):
