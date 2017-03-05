@@ -23,7 +23,7 @@ def corr_wrapper(X, y):
 def _prob_test(feature_column, target, feature_score, score_fun):
     random_scores = []
     for i in range(1000):
-        random_column = np.random.shuffle(list(feature_column))
+        random_column = np.random.permutation(feature_column)
         score = score_fun(random_column, target)
         random_scores.append(score)
     greater_scores = sum(1 if score > feature_score else 0 for score in random_scores)
