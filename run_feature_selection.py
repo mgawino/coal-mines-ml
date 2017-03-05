@@ -301,7 +301,8 @@ def validate_mrmr_selector(selection_transformer, train_features, y_train, test_
         train_features,
         y_train,
         selection_transformer.scores_,
-        max_features=20
+        feature_names=feature_names,
+        max_features=20,
     )
     selection_duration = time.process_time() - start
     X_train = train_features[:, selected_feature_indices]

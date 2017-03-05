@@ -21,7 +21,7 @@ def corr_wrapper(X, y):
     return np.asarray(scores), np.asarray(pvalues)
 
 
-def mrmr(X, y, scores, max_features):
+def mrmr(X, y, scores, feature_names, max_features):
     score_cache = dict()
 
     def _score(first_ix, second_ix):
@@ -37,21 +37,21 @@ def mrmr(X, y, scores, max_features):
     def _redundancy(feature_ix):
         return sum(_score(feature_ix, selected_ix) for selected_ix in selected_feature_indices)
 
-    top_feature_indices = sorted(enumerate(scores), key=itemgetter(1))
-    top_feature_indices = set(ix for ix, _ in top_feature_indices)
+    feature_indices = set(range(X.shape[1]))
     selected_feature_indices = list()
 
     while len(selected_feature_indices) != max_features:
         max_diff = -1000
         max_ix = -1
-        for feature_ix in top_feature_indices:
+        for feature_ix in feature_indices:
             diff = scores[feature_ix] - _redundancy(feature_ix)
             if diff > max_diff:
                 max_diff = diff
                 max_ix = feature_ix
         if max_diff < 0:
             break
-        top_feature_indices.remove(max_ix)
+        print('Selected {}'.format(feature_names[max_ix]))
+        feature_indices.remove(max_ix)
         selected_feature_indices.append(max_ix)
 
     return selected_feature_indices
