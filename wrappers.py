@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from operator import itemgetter
 
 import numpy as np
 from scipy.stats import pearsonr
@@ -21,8 +20,22 @@ def corr_wrapper(X, y):
     return np.asarray(scores), np.asarray(pvalues)
 
 
+def _prob_test(feature_column, target, feature_score, score_fun):
+    random_scores = []
+    for i in range(1000):
+        random_column = np.random.shuffle(feature_column)
+        score = score_fun(random_column, target)
+        random_scores.append(score)
+    greater_scores = sum(1 if score > feature_score else 0 for score in random_scores)
+    return greater_scores / 1000.0
+
+
 def mrmr(X, y, scores, feature_names, max_features):
     score_cache = dict()
+
+    def _score_fun(x, y):
+        score, _ = pearsonr(x, y)
+        return score
 
     def _score(first_ix, second_ix):
         cache_key = tuple(sorted((first_ix, second_ix)))
@@ -49,9 +62,8 @@ def mrmr(X, y, scores, feature_names, max_features):
             if diff > max_diff:
                 max_diff = diff
                 max_ix = feature_ix
-        if max_diff < 0:
+        if max_diff < 0 or _prob_test(X[:, max_ix], y, scores[max_ix], _score_fun) > 0.01:
             break
-        print('Selected {}'.format(feature_names[max_ix]))
         feature_indices.remove(max_ix)
         selected_feature_indices.append(max_ix)
 
