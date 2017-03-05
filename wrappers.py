@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from operator import itemgetter
+
 import numpy as np
 from scipy.stats import pearsonr
 from skfeature.function.statistical_based.gini_index import gini_index
@@ -29,13 +31,14 @@ def mrmr(X, y, scores, max_features):
         first_column = X[:, cache_key[0]]
         second_column = X[:, cache_key[1]]
         score, _ = pearsonr(first_column, second_column)
-        score_cache[cache_key] = score
+        score_cache[cache_key] = abs(score)
         return score
 
     def _redundancy(feature_ix):
         return sum(_score(feature_ix, selected_ix) for selected_ix in selected_feature_indices)
 
-    top_feature_indices = set(np.argsort(scores)[-500:])
+    top_feature_indices = sorted(enumerate(scores), key=itemgetter(1))
+    top_feature_indices = set(ix for ix, _ in top_feature_indices[-500:])
     selected_feature_indices = set()
 
     while len(selected_feature_indices) != max_features:
