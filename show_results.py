@@ -24,8 +24,8 @@ LABEL_TO_METHANOMETER = {
 }
 
 
-def iter_results():
-    for result_path in glob.glob(os.path.join(RESULTS_PATH, '*')):
+def iter_results(results_path):
+    for result_path in glob.glob(os.path.join(results_path, '*')):
         with open(result_path) as result_file:
             yield json.load(result_file)
 
@@ -39,9 +39,9 @@ def _sort_list_of_lists(data, header, sort_keys, reverse):
     )
 
 
-def _read_data(header):
+def _read_data(header, results_path):
     data = []
-    for result in iter_results():
+    for result in iter_results(results_path):
         row = [result.get(key) for key in header]
         data.append(row)
     return data
@@ -71,7 +71,8 @@ def modify_data(data, header, include_features, feature_count, filter_label):
     return data
 
 
-def show_results(sort_keys, sort_desc, include_features, feature_count, include_times, include_params, filter_label):
+def show_results(sort_keys, sort_desc, include_features, feature_count, include_times,
+                 include_params, filter_label, results_path):
     header = STATS_HEADER
     if include_features:
         header.extend(FEATURES_HEADER)
@@ -79,7 +80,7 @@ def show_results(sort_keys, sort_desc, include_features, feature_count, include_
         header.extend(TIMES_HEADER)
     if include_params:
         header.extend(PARAMS_HEADER)
-    data = _read_data(header)
+    data = _read_data(header, results_path)
     data = modify_data(data, header, include_features, feature_count, filter_label)
     if sort_keys:
         data = _sort_list_of_lists(data, header, sort_keys, sort_desc)
@@ -109,6 +110,11 @@ def show_summary():
     '--filter-label', '-fl',
     default=ALL_LABELS,
     type=click.Choice(list(LABEL_TO_METHANOMETER.values()))
+)
+@click.option(
+    '--results-path', '-rp',
+    type=click.Path(dir_okay=True, file_okay=False),
+    default=RESULTS_PATH
 )
 def main(describe_data, **kwargs):
     if describe_data:
