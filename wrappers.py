@@ -38,13 +38,14 @@ def mrmr(X, y, scores, feature_names, max_features):
         return sum(_score(feature_ix, selected_ix) for selected_ix in selected_feature_indices)
 
     feature_indices = set(range(X.shape[1]))
-    selected_feature_indices = list()
-
+    max_ix = np.argmax(scores)
+    selected_feature_indices = [max_ix]
+    feature_indices.remove(max_ix)
     while len(selected_feature_indices) != max_features:
         max_diff = -1000
         max_ix = -1
         for feature_ix in feature_indices:
-            diff = scores[feature_ix] - _redundancy(feature_ix)
+            diff = scores[feature_ix] - (_redundancy(feature_ix) / len(selected_feature_indices))
             if diff > max_diff:
                 max_diff = diff
                 max_ix = feature_ix
