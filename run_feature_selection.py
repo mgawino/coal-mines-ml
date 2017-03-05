@@ -124,10 +124,10 @@ def make_classifiers():
 
 def make_ranking_selectors():
     return [
-        SelectKBest(gini_index_wrapper),
+        # SelectKBest(gini_index_wrapper),
         SelectKBest(corr_wrapper),
-        SelectKBest(f_classif),
-        SelectKBest(mutual_info_classif)
+        # SelectKBest(f_classif),
+        # SelectKBest(mutual_info_classif)
     ]
 
 
@@ -360,10 +360,10 @@ def main(clear_cache, n_jobs, test):
     print_labels_summary(y_train, y_test)
     train_features, test_features, feature_names = pre_filter(train_features, test_features, feature_names)
     methods = [
-        # iter_ranking_methods,
+        iter_ranking_methods,
         # iter_model_selection_methods,
         # iter_dimensionality_reduction_methods
-        iter_mrmr_methods
+        # iter_mrmr_methods
     ]
     jobs = [method(train_features, y_train, test_features, y_test, feature_names) for method in methods]
     Parallel(n_jobs=n_jobs, verbose=1, pre_dispatch='n_jobs')(itertools.chain(*jobs))
