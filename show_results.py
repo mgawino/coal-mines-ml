@@ -2,14 +2,19 @@
 import glob
 import json
 import os
+import pickle
 import textwrap
 from collections import Counter
+from operator import itemgetter
+
+import numpy as np
 
 import click
+from feature_extractor import FeatureExtractor
 from reader import DataReader
+from run_feature_selection import load_from_cache
 from terminaltables import AsciiTable
-from utils import RESULTS_PATH
-
+from utils import RESULTS_PATH, MODEL_CACHE_PATH
 
 STATS_HEADER = ['AUC', 'model', 'f_num', 'score_fun', 'label']
 TIMES_HEADER = ['c_time', 's_time']
@@ -98,8 +103,23 @@ def show_summary():
         print('Test -> ' + ' '.join('{} {}'.format(key, value) for key, value in test_counts.items()))
 
 
+def show_features(label_ix):
+    feature_names = np.load(FeatureExtractor.FEATURE_NAMES_CACHE_PATH)
+    for model_path in glob.glob(os.path.join(MODEL_CACHE_PATH, '{}_*'.format(label_ix))):
+        model, duration = load_from_cache(model_path)
+        assert len(feature_names) == len(model.scores_)
+        sorted_scores = sorted(enumerate(model.scores_), key=itemgetter(1), reverse=True)
+        i = 0
+        print(os.path.basename(model_path))
+        while i < 50:
+            print(feature_names[sorted_scores[i][0]], sorted_scores[i][1])
+            i += 1
+        print('------------------------------')
+
+
 @click.command()
 @click.option('--describe-data', '-dd', is_flag=True)
+@click.option('--label-best-features', '-lbf', type=click.INT, default=-1)
 @click.option('--sort-keys', '-s', multiple=True, type=click.Choice(STATS_HEADER))
 @click.option('--sort-desc', '-desc', is_flag=True)
 @click.option('--include-features', '-if', is_flag=True)
@@ -116,9 +136,11 @@ def show_summary():
     type=click.Path(dir_okay=True, file_okay=False),
     default=RESULTS_PATH
 )
-def main(describe_data, **kwargs):
+def main(describe_data, label_best_features, **kwargs):
     if describe_data:
         show_summary()
+    elif label_best_features != -1:
+        show_features(label_best_features)
     else:
         show_results(**kwargs)
 
