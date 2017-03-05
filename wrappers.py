@@ -39,7 +39,7 @@ def mrmr(X, y, scores, max_features):
 
     top_feature_indices = sorted(enumerate(scores), key=itemgetter(1))
     top_feature_indices = set(ix for ix, _ in top_feature_indices[-500:])
-    selected_feature_indices = set()
+    selected_feature_indices = list()
 
     while len(selected_feature_indices) != max_features:
         max_diff = -1000
@@ -52,6 +52,6 @@ def mrmr(X, y, scores, max_features):
         if max_diff < 0:
             break
         top_feature_indices.remove(max_ix)
-        selected_feature_indices.add(max_ix)
+        selected_feature_indices.append(max_ix)
 
     return list(selected_feature_indices)
