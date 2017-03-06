@@ -266,7 +266,7 @@ def validate_model_selectors(model_selector, train_features, y_train, test_featu
         selected_features = feature_names[selector.get_support(indices=True)]
         for classifier in make_classifiers():
             classification_duration = timeit(classifier.fit, X_train, y_train)
-            predictions = classifier.predict(X_test)
+            predictions = classifier.predict_proba(X_test)
             save_results(
                 prefix='model',
                 classifier=classifier,
@@ -311,7 +311,7 @@ def validate_mrmr_selector(selection_transformer, train_features, y_train, test_
     selected_features = feature_names[selected_feature_indices]
     for classifier in make_classifiers():
         classification_duration = timeit(classifier.fit, X_train, y_train)
-        predictions = classifier.predict(X_test)
+        predictions = classifier.predict_proba(X_test)
         save_results(
             prefix='ranking',
             classifier=classifier,
@@ -361,7 +361,7 @@ def main(clear_cache, n_jobs, test):
     print_labels_summary(y_train, y_test)
     train_features, test_features, feature_names = pre_filter(train_features, test_features, feature_names)
     methods = [
-        # iter_ranking_methods,
+        iter_ranking_methods,
         # iter_model_selection_methods,
         # iter_dimensionality_reduction_methods
         iter_mrmr_methods
