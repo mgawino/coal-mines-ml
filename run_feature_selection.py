@@ -80,7 +80,7 @@ def print_labels_summary(y_train, y_test):
 
 def save_results(prefix, classifier, y_true, predictions, score_fun, feature_num,
                  label_ix, select_time, clasiff_time, selected_features=None):
-    auc_score = roc_auc_score(y_true, predictions)
+    auc_score = roc_auc_score(y_true, predictions[:, 1])
     if hasattr(classifier, 'estimator'):
         result = {
           'model': classifier.estimator.__class__.__name__,
@@ -115,8 +115,7 @@ def make_classifiers():
         'C': scipy.stats.expon(scale=400)
     }
     return [
-        SVC(cache_size=500, kernel='rbf', class_weight='balanced'),
-        LinearSVC(class_weight='balanced'),
+        SVC(cache_size=500, kernel='rbf', class_weight='balanced', probability=True),
         DecisionTreeClassifier(class_weight='balanced'),
         LogisticRegression(class_weight='balanced')
     ]
