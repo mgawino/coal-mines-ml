@@ -124,10 +124,10 @@ def make_classifiers():
 
 def make_ranking_selectors():
     return [
-        # SelectKBest(gini_index_wrapper),
+        SelectKBest(gini_index_wrapper),
         SelectKBest(corr_wrapper),
-        # SelectKBest(f_classif),
-        # SelectKBest(mutual_info_classif)
+        SelectKBest(f_classif),
+        SelectKBest(mutual_info_classif)
     ]
 
 
@@ -185,7 +185,7 @@ def validate_ranking_selection(selection_transformer, train_features, y_train, t
         selected_features = feature_names[selection_transformer.get_support(indices=True)]
         for classifier in make_classifiers():
             classification_duration = timeit(classifier.fit, X_train, y_train)
-            predictions = classifier.predict(X_test)
+            predictions = classifier.predict_proba(X_test)
             save_results(
                 prefix='ranking',
                 classifier=classifier,
